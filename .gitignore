@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Secrets: environment files (settings are documented in README.md)
+.env
+.env.*
+
+# Build output
+dist/
+client/dist/
+mobile/build/
+*.apk
+*.aab
+
+# User uploads (keep the empty folder)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs and test coverage
+*.log
+npm-debug.log*
+coverage/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
