@@ -107,6 +107,34 @@ try {
   check('member cannot update a task no longer assigned to them', r.status === 403, r.status);
   r = await call('DELETE', `/tasks/${task._id}`, priya);
   check('manager can delete a task', r.status === 204, r.status);
+
+  // ---- Project chat
+  const chat = `/projects/${project._id}/messages`;
+  r = await call('POST', chat, rahul, { text: 'Hi team, homepage draft is ready' });
+  check('member can send a chat message', r.status === 201 && r.data.message.sender.name === 'Rahul', r.status);
+  const rahulMsg = r.data.message;
+  r = await call('POST', chat, owner, { text: 'Great, reviewing now' });
+  check('owner can send a chat message', r.status === 201, r.status);
+  const ownerMsg = r.data.message;
+  r = await call('POST', chat, rahul, { text: '   ' });
+  check('empty message is rejected', r.status === 400, r.status);
+  r = await call('POST', chat, amit, { text: 'let me in' });
+  check('non-member cannot post in the chat', r.status === 403 || r.status === 404, r.status);
+  r = await call('GET', chat, amit);
+  check('non-member cannot read the chat', r.status === 403 || r.status === 404, r.status);
+  r = await call('GET', chat, priya);
+  check('messages come back oldest first', r.status === 200 && r.data.messages.map((m) => m.text).join('|') === 'Hi team, homepage draft is ready|Great, reviewing now');
+  r = await call('DELETE', `${chat}/${ownerMsg._id}`, rahul);
+  check("member cannot delete someone else's message", r.status === 403, r.status);
+  r = await call('DELETE', `${chat}/${rahulMsg._id}`, rahul);
+  check('member can delete own message', r.status === 204, r.status);
+  r = await call('DELETE', `${chat}/${ownerMsg._id}`, priya);
+  check('manager can delete any message', r.status === 204, r.status);
+  for (let i = 0; i < 55; i += 1) await call('POST', chat, owner, { text: `msg ${i}` });
+  r = await call('GET', chat, rahul);
+  check('chat returns pages of 50 with hasMore', r.data.messages.length === 50 && r.data.hasMore === true, `${r.data.messages.length}`);
+  const older = await call('GET', `${chat}?before=${encodeURIComponent(r.data.messages[0].createdAt)}`, rahul);
+  check('older page returns the rest', older.data.messages.length === 5 && older.data.hasMore === false, `${older.data.messages.length}`);
 } catch (err) {
   console.error(err);
   failures += 1;

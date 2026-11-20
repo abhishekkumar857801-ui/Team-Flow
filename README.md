@@ -149,6 +149,8 @@ All routes are under `/api`. Every route except register, login and health needs
 | GET | `/teams/:teamId/activity`, `/teams/:teamId/reports/tasks.csv` | member |
 | GET/POST | `/teams/:teamId/projects` | member / manager |
 | GET/PATCH/DELETE | `/projects/:projectId` | member / manager |
+| GET/POST | `/projects/:projectId/messages` (project chat) | member |
+| DELETE | `/projects/:projectId/messages/:messageId` | sender / manager |
 | GET | `/teams/:teamId/tasks` | member |
 | POST | `/teams/:teamId/tasks` (create task) | manager |
 | GET | `/tasks/mine` | signed in |
@@ -159,6 +161,7 @@ All routes are under `/api`. Every route except register, login and health needs
 - `task:created`, `task:updated`, `task:deleted`
 - `project:changed`, `team:updated`
 - `activity:new`
+- `chat:message`, `chat:deleted`: project chat
 - `notify`: personal "task assigned to you" message
 
 **Security:**

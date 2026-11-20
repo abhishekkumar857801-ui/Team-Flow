@@ -108,6 +108,7 @@ export default function ProjectsPage() {
                 <div className="small row"><Icon name="calendar" size={14} />{formatDate(p.deadline)} · <span className={`tone-${due.tone}`}>{due.text}</span></div>
                 <div className="row">
                   <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}`)}><Icon name="board" size={14} />Open board</button>
+                  <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}&chat=1`)}><Icon name="chat" size={14} />Chat</button>
                   {isManager && <button className="btn sm" onClick={() => setEditing(p)}>Edit</button>}
                   {isManager && <button className="btn sm danger" onClick={() => remove(p)}>Delete</button>}
                 </div>

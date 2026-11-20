@@ -6,6 +6,7 @@ import { useSocketEvents } from '../lib/socket.js';
 import { STATUSES, relativeDue } from '../lib/format.js';
 import { Avatar, Badge, Spinner, useToast } from '../components/ui.jsx';
 import TaskModal from '../components/TaskModal.jsx';
+import ProjectChat from '../components/ProjectChat.jsx';
 import Icon from '../components/Icon.jsx';
 
 const isOverdue = (t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date();
@@ -25,6 +26,8 @@ export default function BoardPage() {
   const [editing, setEditing] = useState(null); // task | 'new'
   const [dragId, setDragId] = useState(null);
   const [dropCol, setDropCol] = useState(null);
+  const [chatOpen, setChatOpen] = useState(params.get('chat') === '1');
+  const currentProject = projects.find((p) => p._id === projectId);
 
   const load = useCallback(() => {
     const q = {};
@@ -99,6 +102,11 @@ export default function BoardPage() {
             <option value="none">Unassigned</option>
             {team.members.filter((m) => m.user).map((m) => <option key={m.user._id} value={m.user._id}>{m.user.name}</option>)}
           </select>
+          {currentProject && (
+            <button className="btn" onClick={() => setChatOpen(true)} title={`Chat about ${currentProject.name}`}>
+              <Icon name="chat" size={16} />Chat
+            </button>
+          )}
           {isManager && (
             <button className="btn primary" onClick={() => setEditing('new')} disabled={!projects.length}
               title={projects.length ? '' : 'Create a project first'}><Icon name="plus" size={16} />New task</button>
@@ -174,6 +182,9 @@ export default function BoardPage() {
         })}
       </div>
 
+      {chatOpen && currentProject && (
+        <ProjectChat project={currentProject} teamId={teamId} isManager={isManager} onClose={() => { setChatOpen(false); setFilter('chat', ''); }} />
+      )}
       {editing && (
         <TaskModal
           task={editing === 'new' ? null : editing}

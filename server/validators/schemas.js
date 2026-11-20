@@ -71,3 +71,7 @@ export const task = {
     status: z.enum(TASK_STATUSES).optional(),
   }),
 };
+
+export const chat = {
+  send: z.object({ text: z.string().trim().min(1, 'Message cannot be empty').max(2000) }),
+};

@@ -157,7 +157,7 @@ class Session extends ChangeNotifier {
       live = false;
       notifyListeners();
     });
-    for (final name in ['task:created', 'task:updated', 'task:deleted', 'tasks:refresh', 'project:changed', 'team:updated', 'activity:new']) {
+    for (final name in ['task:created', 'task:updated', 'task:deleted', 'tasks:refresh', 'project:changed', 'team:updated', 'activity:new', 'chat:message', 'chat:deleted']) {
       socket.on(name, (data) => _events.add(LiveEvent(name, data)));
     }
     socket.on('notify', (data) {

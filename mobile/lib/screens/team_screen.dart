@@ -7,6 +7,7 @@ import '../models.dart';
 import '../services/session.dart';
 import '../widgets/common.dart';
 import 'new_task_sheet.dart';
+import 'project_chat_screen.dart';
 import 'task_detail_screen.dart';
 
 /// One team: its task list and a phone-sized view of the risk dashboard.
@@ -150,6 +151,26 @@ class _TeamScreenState extends State<TeamScreen> {
               ),
           ]),
         ),
+        if (_projectFilter != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: FilledButton.tonalIcon(
+              onPressed: () {
+                final project = _projects.firstWhere((p) => p.id == _projectFilter);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ProjectChatScreen(project: project, isManager: widget.team.isManager)),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: Text('Open ${_projects.firstWhere((p) => p.id == _projectFilter).name} chat'),
+            ),
+          )
+        else if (_projects.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Text('Tip: pick a project above to open its chat.', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+          ),
         if (tasks.isEmpty) const EmptyState(icon: Icons.inbox_outlined, title: 'No tasks here yet'),
         for (final t in tasks)
           TaskTile(

@@ -4,6 +4,7 @@ import Invite, { teamPrefix } from '../models/Invite.js';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import Activity from '../models/Activity.js';
+import Message from '../models/Message.js';
 import { asyncHandler, badRequest, forbidden, notFound } from '../utils/http.js';
 import { hasRole } from '../middleware/team.js';
 import { logActivity } from '../services/activity.js';
@@ -54,6 +55,7 @@ export const deleteTeam = asyncHandler(async (req, res) => {
     Task.deleteMany({ team: teamId }),
     Project.deleteMany({ team: teamId }),
     Activity.deleteMany({ team: teamId }),
+    Message.deleteMany({ team: teamId }),
     Invite.deleteMany({ team: teamId }),
   ]);
   await req.team.deleteOne();

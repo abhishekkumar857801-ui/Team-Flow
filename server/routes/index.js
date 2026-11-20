@@ -9,6 +9,7 @@ import * as auth from '../controllers/authController.js';
 import * as teams from '../controllers/teamController.js';
 import * as projects from '../controllers/projectController.js';
 import * as tasks from '../controllers/taskController.js';
+import * as chat from '../controllers/chatController.js';
 import * as dashboard from '../controllers/dashboardController.js';
 
 const router = Router();
@@ -55,6 +56,11 @@ router.post('/teams/:teamId/projects', requireTeamRole('manager'), validate({ bo
 router.get('/projects/:projectId', projects.getProject);
 router.patch('/projects/:projectId', validate({ body: S.project.update }), projects.updateProject);
 router.delete('/projects/:projectId', projects.deleteProject);
+
+// ---- Project chat (any team member) ----
+router.get('/projects/:projectId/messages', chat.listMessages);
+router.post('/projects/:projectId/messages', validate({ body: S.chat.send }), chat.sendMessage);
+router.delete('/projects/:projectId/messages/:messageId', chat.deleteMessage);
 
 // ---- Tasks ----
 router.get('/tasks/mine', tasks.listMyTasks);

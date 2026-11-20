@@ -1,6 +1,8 @@
 // Small inline SVG icon set (stroke icons, 24x24 grid) so we don't need an icon library.
 const PATHS = {
   chevronDown: 'm6 9 6 6 6-6',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
   dot: 'M12 12h.01',
   dashboard: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
   board: 'M3 4h5v16H3zM10 4h5v10h-5zM17 4h4v13h-4z',
