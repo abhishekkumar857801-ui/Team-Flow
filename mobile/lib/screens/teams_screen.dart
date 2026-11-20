@@ -46,7 +46,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
           autofocus: true,
           textCapitalization: create ? TextCapitalization.words : TextCapitalization.characters,
           maxLength: create ? 80 : 6,
-          decoration: InputDecoration(labelText: create ? 'Team name' : '6-character join code'),
+          decoration: InputDecoration(labelText: create ? 'Team name' : 'Invite code (e.g. BIN7K2)'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

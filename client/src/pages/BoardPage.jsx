@@ -8,6 +8,8 @@ import { Avatar, Badge, Spinner, useToast } from '../components/ui.jsx';
 import TaskModal from '../components/TaskModal.jsx';
 import Icon from '../components/Icon.jsx';
 
+const isOverdue = (t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date();
+
 const COLUMN_COLOR = { todo: '#94a3b8', in_progress: '#2563eb', review: '#f97316', done: '#16a34a' };
 
 export default function BoardPage() {
@@ -18,6 +20,7 @@ export default function BoardPage() {
   const [params, setParams] = useSearchParams();
   const projectId = params.get('project') || '';
   const assignee = params.get('assignee') || '';
+  const view = params.get('view') || ''; // '', 'overdue' or 'done' (from the sidebar)
   const [tasks, setTasks] = useState(null);
   const [editing, setEditing] = useState(null); // task | 'new'
   const [dragId, setDragId] = useState(null);
@@ -96,17 +99,30 @@ export default function BoardPage() {
             <option value="none">Unassigned</option>
             {team.members.filter((m) => m.user).map((m) => <option key={m.user._id} value={m.user._id}>{m.user.name}</option>)}
           </select>
-          <button className="btn primary" onClick={() => setEditing('new')} disabled={!projects.length}
-            title={projects.length ? '' : 'Create a project first'}><Icon name="plus" size={16} />New task</button>
+          {isManager && (
+            <button className="btn primary" onClick={() => setEditing('new')} disabled={!projects.length}
+              title={projects.length ? '' : 'Create a project first'}><Icon name="plus" size={16} />New task</button>
+          )}
         </div>
       </div>
 
-      {!projects.length && <div className="card empty">Create a project first, then add tasks to it.</div>}
+      {!projects.length && (
+        <div className="card empty">
+          {isManager ? 'Create a project first, then add tasks to it.' : 'No projects yet. Your owner or manager will add them.'}
+        </div>
+      )}
+      {view && (
+        <div className="row" style={{ marginBottom: 14 }}>
+          <Badge tone="primary">{view === 'overdue' ? 'Showing overdue tasks' : 'Showing completed tasks'}</Badge>
+          <button className="btn sm ghost" onClick={() => setFilter('view', '')}>Show all</button>
+        </div>
+      )}
 
       <div className="board">
         {STATUSES.map((col) => {
           const items = tasks
             .filter((t) => t.status === col.key)
+            .filter((t) => (view === 'done' ? t.status === 'done' : view === 'overdue' ? isOverdue(t) : true))
             .sort((a, b) => new Date(a.dueDate || 8.64e15) - new Date(b.dueDate || 8.64e15));
           return (
             <div
@@ -128,7 +144,7 @@ export default function BoardPage() {
                     key={t._id}
                     className={`task-card ${dragId === t._id ? 'dragging' : ''}`}
                     style={{ '--accent': t.project?.color }}
-                    draggable
+                    draggable={isManager || t.assignee?._id === user._id}
                     onDragStart={(e) => { e.dataTransfer.setData('text/plain', t._id); setDragId(t._id); }}
                     onDragEnd={() => setDragId(null)}
                     onClick={() => setEditing(t)}

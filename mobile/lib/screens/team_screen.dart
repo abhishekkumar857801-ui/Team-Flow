@@ -65,6 +65,18 @@ class _TeamScreenState extends State<TeamScreen> {
     }
   }
 
+  // Creates a single-use invite code (e.g. BIN7K2) and copies it.
+  Future<void> _newInvite() async {
+    try {
+      final res = await session.api.post('/teams/$_teamId/invites', {});
+      final code = res['invite']['code'] as String;
+      await Clipboard.setData(ClipboardData(text: code));
+      if (mounted) showSnack(context, 'Invite code $code copied. It works for one person only.');
+    } catch (e) {
+      if (mounted) showSnack(context, e.toString());
+    }
+  }
+
   Future<void> _newTask() async {
     if (_projects.isEmpty) {
       showSnack(context, 'This team has no projects yet. A manager can create one on the web app.');
@@ -90,18 +102,19 @@ class _TeamScreenState extends State<TeamScreen> {
         appBar: AppBar(
           title: Text(widget.team.name),
           actions: [
-            IconButton(
-              tooltip: 'Copy join code',
-              icon: const Icon(Icons.person_add_alt),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: widget.team.joinCode));
-                showSnack(context, 'Join code ${widget.team.joinCode} copied');
-              },
-            ),
+            if (widget.team.isManager)
+              IconButton(
+                tooltip: 'New invite code',
+                icon: const Icon(Icons.person_add_alt),
+                onPressed: _newInvite,
+              ),
           ],
           bottom: const TabBar(tabs: [Tab(text: 'Tasks'), Tab(text: 'Risk')]),
         ),
-        floatingActionButton: FloatingActionButton(onPressed: _newTask, tooltip: 'New task', child: const Icon(Icons.add_task)),
+        // Only the owner and managers can create tasks.
+        floatingActionButton: widget.team.isManager
+            ? FloatingActionButton(onPressed: _newTask, tooltip: 'New task', child: const Icon(Icons.add_task))
+            : null,
         body: _tasks == null
             ? (_error != null
                 ? EmptyState(icon: Icons.cloud_off, title: 'Could not load team', subtitle: _error)

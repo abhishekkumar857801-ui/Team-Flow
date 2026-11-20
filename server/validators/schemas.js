@@ -35,6 +35,7 @@ export const team = {
   }),
   update: z.object({ name: z.string().trim().min(2).max(80), description: z.string().trim().max(500) }).partial(),
   join: z.object({ joinCode: z.string().trim().toUpperCase().length(6, 'must be 6 characters') }),
+  invite: z.object({ label: z.string().trim().max(60).optional().default('') }),
   memberRole: z.object({ role: z.enum(['manager', 'member']) }),
 };
 

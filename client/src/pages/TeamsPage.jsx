@@ -102,8 +102,8 @@ export default function TeamsPage() {
                 </label>
               </>
             ) : (
-              <label className="field">6-character join code
-                <input autoFocus required maxLength={6} placeholder="e.g. DEMO42" value={form.joinCode}
+              <label className="field">Invite code (6 characters, works once)
+                <input autoFocus required maxLength={6} placeholder="e.g. BIN7K2" value={form.joinCode}
                   onChange={(e) => setForm({ ...form, joinCode: e.target.value.toUpperCase() })} />
               </label>
             )}

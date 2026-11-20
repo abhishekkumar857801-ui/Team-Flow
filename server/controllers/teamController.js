@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import crypto from 'node:crypto';
 import Team from '../models/Team.js';
+import Invite, { teamPrefix } from '../models/Invite.js';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import Activity from '../models/Activity.js';
@@ -11,7 +11,11 @@ import { emitToTeam } from '../services/realtime.js';
 
 const MEMBER_FIELDS = 'name email avatarColor weeklyCapacity';
 
-const withRole = (team, userId) => ({ ...team.toObject(), myRole: team.roleOf(userId) });
+// joinCode is a legacy field (one shared code per team); joining now uses single-use invites.
+const withRole = (team, userId) => {
+  const { joinCode, ...rest } = team.toObject();
+  return { ...rest, myRole: team.roleOf(userId), invitePrefix: teamPrefix(team.name) };
+};
 
 export const listMyTeams = asyncHandler(async (req, res) => {
   const teams = await Team.find({ 'members.user': req.user._id })
@@ -50,29 +54,65 @@ export const deleteTeam = asyncHandler(async (req, res) => {
     Task.deleteMany({ team: teamId }),
     Project.deleteMany({ team: teamId }),
     Activity.deleteMany({ team: teamId }),
+    Invite.deleteMany({ team: teamId }),
   ]);
   await req.team.deleteOne();
   emitToTeam(teamId, 'team:deleted', { teamId });
   res.status(204).end();
 });
 
+// Join with a single-use invite code. The code is used up the moment it is accepted.
 export const joinTeam = asyncHandler(async (req, res) => {
-  const team = await Team.findOne({ joinCode: req.body.joinCode });
-  if (!team) throw notFound('No team found with that join code');
-  if (!team.roleOf(req.user._id)) {
-    team.members.push({ user: req.user._id, role: 'member' });
-    await team.save();
-    await logActivity({ req, team: team._id, action: 'team.joined', message: `${req.user.name} joined the team` });
-    emitToTeam(team._id, 'team:updated', { teamId: team._id });
-  }
+  const invite = await Invite.findOne({ code: req.body.joinCode });
+  if (!invite) throw notFound('Invalid join code');
+  if (invite.usedBy) throw badRequest('This join code has already been used. Ask your manager for a new one.');
+
+  const team = await Team.findById(invite.team);
+  if (!team) throw notFound('The team for this code no longer exists');
+  // Don't waste the code on someone who is already in the team.
+  if (team.roleOf(req.user._id)) throw badRequest('You are already a member of this team');
+
+  // Claim the code atomically so two people can't use it at the same time.
+  const claimed = await Invite.findOneAndUpdate(
+    { _id: invite._id, usedBy: null },
+    { usedBy: req.user._id, usedAt: new Date() },
+    { new: true }
+  );
+  if (!claimed) throw badRequest('This join code has already been used. Ask your manager for a new one.');
+
+  team.members.push({ user: req.user._id, role: 'member' });
+  await team.save();
+  await logActivity({ req, team: team._id, action: 'team.joined', message: `${req.user.name} joined the team` });
+  emitToTeam(team._id, 'team:updated', { teamId: team._id });
+
   await team.populate('members.user', MEMBER_FIELDS);
   res.json({ team: withRole(team, req.user._id) });
 });
 
-export const regenerateJoinCode = asyncHandler(async (req, res) => {
-  req.team.joinCode = crypto.randomBytes(3).toString('hex').toUpperCase();
-  await req.team.save();
-  res.json({ joinCode: req.team.joinCode });
+export const listInvites = asyncHandler(async (req, res) => {
+  const invites = await Invite.find({ team: req.team._id })
+    .populate('usedBy', 'name email')
+    .populate('createdBy', 'name')
+    .sort({ createdAt: -1 })
+    .limit(100);
+  res.json({ invites, prefix: teamPrefix(req.team.name) });
+});
+
+export const createInvite = asyncHandler(async (req, res) => {
+  const invite = await Invite.createFor(req.team, req.user._id, req.body.label);
+  await invite.populate('createdBy', 'name');
+  res.status(201).json({ invite });
+});
+
+// Revoke a code that hasn't been used yet. Used codes stay as a record of who joined.
+export const deleteInvite = asyncHandler(async (req, res) => {
+  const { inviteId } = req.params;
+  if (!mongoose.isValidObjectId(inviteId)) throw badRequest('Invalid invite id');
+  const invite = await Invite.findOne({ _id: inviteId, team: req.team._id });
+  if (!invite) throw notFound('Invite not found');
+  if (invite.usedBy) throw badRequest('This code was already used and cannot be revoked');
+  await invite.deleteOne();
+  res.status(204).end();
 });
 
 export const updateMemberRole = asyncHandler(async (req, res) => {

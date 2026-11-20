@@ -108,7 +108,7 @@ The APK is written to `mobile/build/app/outputs/flutter-apk/app-release.apk`.
 
 ### Demo accounts (after seeding)
 
-All three use the password `demo1234`. The join code is `DEMO42`.
+All three use the password `demo1234`. To add more people, Asha creates a one-time invite code on the **Members** page (codes look like `COD7K2`).
 
 | Email | Role |
 |---|---|
@@ -142,13 +142,15 @@ All routes are under `/api`. Every route except register, login and health needs
 | GET/PATCH | `/auth/me` | signed in |
 | GET/POST | `/teams` · POST `/teams/join` | signed in |
 | GET/PATCH/DELETE | `/teams/:teamId` | member / manager / owner |
-| POST | `/teams/:teamId/join-code` | manager |
+| GET / POST | `/teams/:teamId/invites` | manager |
+| DELETE | `/teams/:teamId/invites/:inviteId` | manager |
 | PATCH/DELETE | `/teams/:teamId/members/:userId` | owner / manager (or self to leave) |
 | GET | `/teams/:teamId/dashboard` | member: **risk dashboard** |
 | GET | `/teams/:teamId/activity`, `/teams/:teamId/reports/tasks.csv` | member |
 | GET/POST | `/teams/:teamId/projects` | member / manager |
 | GET/PATCH/DELETE | `/projects/:projectId` | member / manager |
-| GET/POST | `/teams/:teamId/tasks` | member |
+| GET | `/teams/:teamId/tasks` | member |
+| POST | `/teams/:teamId/tasks` (create task) | manager |
 | GET | `/tasks/mine` | signed in |
 | GET/PATCH/DELETE | `/tasks/:taskId` | member (own tasks) / manager |
 | POST/DELETE | `/tasks/:taskId/attachments[/:id]` | assignee / manager |
@@ -188,3 +190,7 @@ All routes are under `/api`. Every route except register, login and health needs
 - Google Calendar sync and email digests.
 - Offline mode with sync queue on mobile; push notifications via FCM when the app is closed.
 - Burndown charts and per-member velocity history.
+
+
+npm run server
+npm run web

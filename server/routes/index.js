@@ -33,7 +33,9 @@ router.post('/teams/join', validate({ body: S.team.join }), teams.joinTeam);
 router.get('/teams/:teamId', requireTeamRole('member'), teams.getTeam);
 router.patch('/teams/:teamId', requireTeamRole('manager'), validate({ body: S.team.update }), teams.updateTeam);
 router.delete('/teams/:teamId', requireTeamRole('owner'), teams.deleteTeam);
-router.post('/teams/:teamId/join-code', requireTeamRole('manager'), teams.regenerateJoinCode);
+router.get('/teams/:teamId/invites', requireTeamRole('manager'), teams.listInvites);
+router.post('/teams/:teamId/invites', requireTeamRole('manager'), validate({ body: S.team.invite }), teams.createInvite);
+router.delete('/teams/:teamId/invites/:inviteId', requireTeamRole('manager'), teams.deleteInvite);
 router.patch(
   '/teams/:teamId/members/:userId',
   requireTeamRole('owner'),
@@ -57,7 +59,7 @@ router.delete('/projects/:projectId', projects.deleteProject);
 // ---- Tasks ----
 router.get('/tasks/mine', tasks.listMyTasks);
 router.get('/teams/:teamId/tasks', requireTeamRole('member'), validate({ query: S.task.listQuery }), tasks.listTeamTasks);
-router.post('/teams/:teamId/tasks', requireTeamRole('member'), validate({ body: S.task.create }), tasks.createTask);
+router.post('/teams/:teamId/tasks', requireTeamRole('manager'), validate({ body: S.task.create }), tasks.createTask);
 router.get('/tasks/:taskId', tasks.getTask);
 router.patch('/tasks/:taskId', validate({ body: S.task.update }), tasks.updateTask);
 router.delete('/tasks/:taskId', tasks.deleteTask);

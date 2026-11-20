@@ -1,9 +1,93 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { Avatar, Badge, useToast } from '../components/ui.jsx';
+import { timeAgo } from '../lib/format.js';
 import Icon from '../components/Icon.jsx';
+
+// Single-use invite codes. Every code starts with the same 3 letters from the
+// team name (e.g. BIN for "Bindas"); each one lets exactly one person join.
+function InvitesCard({ team }) {
+  const toast = useToast();
+  const [invites, setInvites] = useState(null);
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(
+    () => api.get(`/teams/${team._id}/invites`).then((r) => setInvites(r.data.invites)).catch((e) => toast(errorMessage(e))),
+    [team._id, toast]
+  );
+  useEffect(() => { load(); }, [load, team.members.length]);
+
+  const create = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/teams/${team._id}/invites`, { label });
+      setLabel('');
+      await load();
+      navigator.clipboard?.writeText(data.invite.code).catch(() => {});
+      toast(`New code ${data.invite.code} created and copied`);
+    } catch (err) {
+      toast(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async (inv) => {
+    try {
+      await api.delete(`/teams/${team._id}/invites/${inv._id}`);
+      load();
+    } catch (err) {
+      toast(errorMessage(err));
+    }
+  };
+
+  const unused = invites?.filter((i) => !i.usedBy).length ?? 0;
+
+  return (
+    <section className="card full">
+      <div className="card-title">
+        <h2><span className="title-icon"><Icon name="key" size={17} /></span>Invite codes</h2>
+        <Badge tone="primary">{unused} unused</Badge>
+      </div>
+      <p className="muted small" style={{ marginTop: -6 }}>
+        Each code works <b>once</b>. Create one per new member; all of them start with <span className="code" style={{ padding: '1px 6px' }}>{team.invitePrefix}</span>.
+        The person enters it under <b>Join with code</b> on the web or in the mobile app.
+      </p>
+      <form className="row wrap" onSubmit={create} style={{ marginTop: 10 }}>
+        <input placeholder="Who is it for? (optional, e.g. Rahul)" maxLength={60} value={label}
+          onChange={(e) => setLabel(e.target.value)} style={{ flex: '1 1 220px', width: 'auto' }} />
+        <button className="btn primary" disabled={busy}><Icon name="plus" size={16} />{busy ? 'Creating…' : 'New invite code'}</button>
+      </form>
+      <div className="invite-list">
+        {invites && invites.length === 0 && <span className="muted small">No codes yet. Create one for each person you want to add.</span>}
+        {invites?.map((inv) => (
+          <div key={inv._id} className={`invite-row ${inv.usedBy ? 'used' : ''}`}>
+            <span className="code">{inv.code}</span>
+            <span className="grow small">
+              {inv.label && <b>{inv.label} · </b>}
+              {inv.usedBy
+                ? <span className="muted">Used by {inv.usedBy.name} {timeAgo(inv.usedAt)}</span>
+                : <span className="muted">Created {timeAgo(inv.createdAt)}{inv.createdBy ? ` by ${inv.createdBy.name}` : ''}</span>}
+            </span>
+            {inv.usedBy ? (
+              <Badge tone="success">used</Badge>
+            ) : (
+              <>
+                <Badge tone="info">unused</Badge>
+                <button className="btn sm" type="button" onClick={() => navigator.clipboard?.writeText(inv.code).then(() => toast('Copied'))}>Copy</button>
+                <button className="btn sm danger" type="button" onClick={() => revoke(inv)}>Revoke</button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function MembersPage() {
   const { team, myRole, isManager, reloadTeam } = useOutletContext();
@@ -68,24 +152,17 @@ export default function MembersPage() {
         <div>
           <div className="eyebrow">{team.name}</div>
           <h1>Members</h1>
-          <p className="muted">Invite people with the join code: they can enter it on the web or in the mobile app.</p>
+          <p className="muted">{isManager ? 'Give each new member their own one-time invite code.' : 'Ask your owner or a manager for an invite code to add someone.'}</p>
         </div>
         <button className="btn" onClick={exportCsv}><Icon name="download" size={16} />Export tasks CSV</button>
       </div>
 
       <div className="dash-grid">
+        {isManager && <InvitesCard team={team} />}
         <section className="card full">
           <div className="card-title">
-            <div className="row">
-              <h2><span className="title-icon"><Icon name="key" size={17} /></span>Join code</h2>
-              <span className="code">{team.joinCode}</span>
-              <button className="btn sm" onClick={() => navigator.clipboard?.writeText(team.joinCode).then(() => toast('Copied'))}>Copy</button>
-            </div>
-            {isManager && (
-              <button className="btn sm" onClick={() => act(() => api.post(`/teams/${team._id}/join-code`), 'New join code generated')}>
-                Regenerate
-              </button>
-            )}
+            <h2><span className="title-icon tint-success"><Icon name="users" size={17} /></span>Team members</h2>
+            <Badge tone="muted">{team.members.length}</Badge>
           </div>
           <div className="table-wrap"><table>
             <thead>

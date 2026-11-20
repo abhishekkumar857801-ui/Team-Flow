@@ -70,7 +70,7 @@ export async function seed() {
 
   await Activity.create({ team: team._id, actor: asha._id, action: 'team.created', message: 'Asha Rao created the team', platform: 'web' });
 
-  console.log('[seed] demo team "Coding Club Core Team" (join code DEMO42)');
+  console.log('[seed] demo team "Coding Club Core Team" (create invite codes on the Members page)');
   console.log('[seed] logins: asha@ / rahul@ / priya@teamflow.dev, password demo1234');
 }
 

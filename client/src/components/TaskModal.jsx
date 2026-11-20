@@ -5,6 +5,8 @@ import { PRIORITIES, STATUSES, fromInputDate, toInputDate } from '../lib/format.
 import { Modal } from './ui.jsx';
 
 // Create (task = null) or edit an existing task.
+// Owners/managers can edit everything. A member can only change the status and
+// progress of a task assigned to them, and attach proof photos.
 export default function TaskModal({ task, team, projects, defaultProject, isManager, onClose, onSaved }) {
   const { user } = useAuth();
   const isNew = !task;
@@ -12,7 +14,7 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
     title: task?.title || '',
     description: task?.description || '',
     project: task?.project?._id || defaultProject || projects[0]?._id || '',
-    assignee: task?.assignee?._id || (isManager ? '' : user._id),
+    assignee: task?.assignee?._id || '',
     status: task?.status || 'todo',
     priority: task?.priority || 'medium',
     dueDate: toInputDate(task?.dueDate),
@@ -23,20 +25,24 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const canEdit = isNew || isManager || task.assignee?._id === user._id || task.createdBy?._id === user._id;
+  const isMine = !isNew && task.assignee?._id === user._id;
+  const canEdit = isManager; // every field
+  const canUpdate = isManager || isMine; // status, progress, proof
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const save = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError('');
-    const payload = {
-      ...form,
-      assignee: form.assignee || null,
-      dueDate: fromInputDate(form.dueDate),
-      estimateHours: Number(form.estimateHours),
-      progress: Number(form.progress),
-    };
+    const payload = canEdit
+      ? {
+          ...form,
+          assignee: form.assignee || null,
+          dueDate: fromInputDate(form.dueDate),
+          estimateHours: Number(form.estimateHours),
+          progress: Number(form.progress),
+        }
+      : { status: form.status, progress: Number(form.progress) };
     try {
       if (isNew) await api.post(`/teams/${team._id}/tasks`, payload);
       else await api.patch(`/tasks/${task._id}`, payload);
@@ -76,6 +82,13 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
     <Modal title={isNew ? 'New task' : 'Task details'} onClose={onClose}>
       <form className="stack" onSubmit={save}>
         {error && <div className="error-box">{error}</div>}
+        {!canEdit && (
+          <div className="info-note">
+            {isMine
+              ? 'You can update the status and progress of this task and add proof photos. Only the owner or a manager can change anything else.'
+              : 'Only the owner, a manager or the assigned member can update this task.'}
+          </div>
+        )}
         <label className="field">Title
           <input autoFocus required minLength={2} value={form.title} onChange={set('title')} disabled={!canEdit} />
         </label>
@@ -92,12 +105,12 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
             <select value={form.assignee} onChange={set('assignee')} disabled={!canEdit}>
               <option value="">Unassigned</option>
               {team.members
-                .filter((m) => m.user && (isManager || m.user._id === user._id || m.user._id === form.assignee))
+                .filter((m) => m.user)
                 .map((m) => <option key={m.user._id} value={m.user._id}>{m.user.name}</option>)}
             </select>
           </label>
           <label className="field">Status
-            <select value={form.status} onChange={set('status')} disabled={!canEdit}>
+            <select value={form.status} onChange={set('status')} disabled={!canUpdate}>
               {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </label>
@@ -114,7 +127,7 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
           </label>
         </div>
         <label className="field">Progress: {form.progress}%
-          <input type="range" min="0" max="100" step="5" value={form.progress} onChange={set('progress')} disabled={!canEdit} />
+          <input type="range" min="0" max="100" step="5" value={form.progress} onChange={set('progress')} disabled={!canUpdate} />
         </label>
 
         {!isNew && (
@@ -128,17 +141,17 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
                 </a>
               ))}
             </div>
-            {canEdit && <input type="file" accept="image/*,application/pdf" onChange={upload} />}
+            {canUpdate && <input type="file" accept="image/*,application/pdf" onChange={upload} />}
           </div>
         )}
 
         <div className="row between">
-          {!isNew && (isManager || task.createdBy?._id === user._id) ? (
+          {!isNew && isManager ? (
             <button type="button" className="btn danger" onClick={remove}>Delete</button>
           ) : <span />}
           <div className="row">
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
-            {canEdit && <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Create task' : 'Save changes'}</button>}
+            {canUpdate && <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Create task' : 'Save changes'}</button>}
           </div>
         </div>
       </form>

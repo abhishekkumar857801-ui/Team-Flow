@@ -16,7 +16,8 @@ const teamSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 80 },
     description: { type: String, trim: true, maxlength: 500, default: '' },
-    // Short code members type (web or mobile) to join the team.
+    // Legacy shared join code, no longer used for joining (see models/Invite.js).
+    // Kept so the existing unique index in the database stays valid.
     joinCode: {
       type: String,
       unique: true,

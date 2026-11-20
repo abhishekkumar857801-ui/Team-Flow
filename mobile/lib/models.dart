@@ -37,11 +37,10 @@ class Team {
   final String id;
   final String name;
   final String description;
-  final String joinCode;
   final String myRole;
   final List<TeamMember> members;
 
-  Team({required this.id, required this.name, required this.description, required this.joinCode, required this.myRole, required this.members});
+  Team({required this.id, required this.name, required this.description, required this.myRole, required this.members});
 
   bool get isManager => myRole == 'owner' || myRole == 'manager';
 
@@ -49,7 +48,6 @@ class Team {
         id: j['_id'].toString(),
         name: j['name'] ?? '',
         description: j['description'] ?? '',
-        joinCode: j['joinCode'] ?? '',
         myRole: j['myRole'] ?? 'member',
         members: ((j['members'] as List?) ?? [])
             .where((m) => m['user'] is Map)

@@ -28,8 +28,10 @@ async function loadTask(req) {
   return { task, team, role };
 }
 
-const isMine = (task, userId) =>
-  String(task.assignee) === String(userId) || String(task.createdBy) === String(userId);
+const isMine = (task, userId) => String(task.assignee) === String(userId);
+
+// The only fields a member may change on a task assigned to them.
+const MEMBER_EDITABLE = new Set(['status', 'progress']);
 
 function ensureAssigneeInTeam(team, assignee) {
   if (assignee && !team.roleOf(assignee)) throw badRequest('Assignee must be a member of this team');
@@ -78,10 +80,7 @@ export const createTask = asyncHandler(async (req, res) => {
   const project = await Project.findOne({ _id: req.body.project, team: req.team._id });
   if (!project) throw badRequest('Project does not belong to this team');
   ensureAssigneeInTeam(req.team, req.body.assignee);
-  // Members may create tasks for themselves; assigning others needs manager.
-  if (req.body.assignee && String(req.body.assignee) !== String(req.user._id) && !hasRole(req.teamRole, 'manager')) {
-    throw forbidden('Only managers can assign tasks to other members');
-  }
+  // Route already requires manager or owner (members cannot create tasks).
 
   const task = await Task.create({ ...req.body, team: req.team._id, createdBy: req.user._id });
   await logActivity({
@@ -108,11 +107,13 @@ export const updateTask = asyncHandler(async (req, res) => {
   if (!manager && !isMine(task, req.user._id)) throw forbidden('You can only update tasks assigned to you');
 
   const changes = req.body;
-  if ('assignee' in changes) {
-    ensureAssigneeInTeam(team, changes.assignee);
-    const reassigningOthers = changes.assignee && String(changes.assignee) !== String(req.user._id);
-    if (!manager && reassigningOthers) throw forbidden('Only managers can reassign tasks to other members');
+  if (!manager) {
+    const blocked = Object.keys(changes).filter((k) => !MEMBER_EDITABLE.has(k));
+    if (blocked.length) {
+      throw forbidden(`Members can only update status and progress (not: ${blocked.join(', ')})`);
+    }
   }
+  if ('assignee' in changes) ensureAssigneeInTeam(team, changes.assignee);
   if (changes.project && String(changes.project) !== String(task.project)) {
     const ok = await Project.exists({ _id: changes.project, team: team._id });
     if (!ok) throw badRequest('Project does not belong to this team');
@@ -141,9 +142,7 @@ export const updateTask = asyncHandler(async (req, res) => {
 
 export const deleteTask = asyncHandler(async (req, res) => {
   const { task, role } = await loadTask(req);
-  if (!hasRole(role, 'manager') && String(task.createdBy) !== String(req.user._id)) {
-    throw forbidden('Only managers or the task creator can delete it');
-  }
+  if (!hasRole(role, 'manager')) throw forbidden('Only the owner or a manager can delete tasks');
   await task.deleteOne();
   await logActivity({
     req,

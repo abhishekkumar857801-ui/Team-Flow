@@ -323,3 +323,21 @@ tbody tr:hover { background: var(--surface-2); }
   .grid-2 { grid-template-columns: 1fr; }
   h1 { font-size: 21px; }
 }
+
+/* ============ Notes, invites, sidebar dropdowns ============ */
+.info-note { background: var(--primary-soft); color: var(--primary-hover); border-radius: 10px; padding: 10px 13px; font-size: 13px; font-weight: 500; }
+.invite-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.invite-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); flex-wrap: wrap; }
+.invite-row.used { background: var(--surface-2); }
+.invite-row.used .code { background: var(--surface-3); color: var(--muted); text-decoration: line-through; }
+.nav-group { display: flex; flex-direction: column; }
+.nav-group > button.nav-parent { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; font: inherit; font-weight: 500; color: var(--muted); cursor: pointer; text-align: left; transition: background 0.12s ease, color 0.12s ease; }
+.nav-group > button.nav-parent:hover { background: var(--surface-2); color: var(--text); }
+.nav-group > button.nav-parent.active { color: var(--primary); background: var(--primary-soft); }
+.nav-group > button.nav-parent .chev { margin-left: auto; transition: transform 0.15s ease; }
+.nav-group.open > button.nav-parent .chev { transform: rotate(180deg); }
+.nav-sub { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 6px 20px; padding-left: 10px; border-left: 2px solid var(--border); }
+.nav-sub a { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.nav-sub a:hover { background: var(--surface-2); color: var(--text); }
+.nav-sub a.active { color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+.nav-sub .empty-sub { padding: 6px 10px; font-size: 12px; color: var(--muted); }
