@@ -27,3 +27,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
+
+# AI coding-agent tooling (Impeccable design skills, local agent settings)
+.claude/
+.gemini/
+.agent/
+.agents/
+.impeccable/

@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useSocketEvents } from '../lib/socket.js';
-import { formatDate, relativeDue, timeAgo } from '../lib/format.js';
-import { Avatar, Badge, Spinner, useToast } from '../components/ui.jsx';
-import Icon, { Ring } from '../components/Icon.jsx';
-
-const RISK_COLOR = { critical: '#e11d48', high: '#f97316', medium: '#0ea5e9', low: '#16a34a', done: '#16a34a' };
+import { formatDate, timeAgo } from '../lib/format.js';
+import { Avatar, Spinner, useToast } from '../components/ui.jsx';
+import Icon from '../components/Icon.jsx';
+import Ticket from '../components/Ticket.jsx';
 
 function useDebounced(fn, ms) {
   const t = useRef();
@@ -15,14 +14,6 @@ function useDebounced(fn, ms) {
     clearTimeout(t.current);
     t.current = setTimeout(fn, ms);
   }, [fn, ms]);
-}
-
-// One number for the hero: 100 = healthy team, lower = more risk.
-function teamHealth(summary, projects) {
-  if (!projects.length && !summary.openTasks) return 100;
-  const avgRisk = projects.length ? projects.reduce((s, p) => s + p.riskScore, 0) / projects.length : 0;
-  const penalty = avgRisk * 0.6 + summary.overloadedMembers * 8 + summary.overdueTasks * 4;
-  return Math.max(0, Math.round(100 - penalty));
 }
 
 const greeting = () => {
@@ -84,164 +75,143 @@ export default function DashboardPage() {
 
   if (!data) return error ? <div className="error-box">{error}</div> : <Spinner />;
   const { summary, members, projects, atRiskTasks, suggestions } = data;
-  const health = teamHealth(summary, projects);
-  const healthLabel = health >= 75 ? 'Healthy' : health >= 50 ? 'Needs attention' : 'At risk';
-
-  const stats = [
-    { label: 'Open tasks', value: summary.openTasks, icon: 'board', tint: 'primary' },
-    { label: 'Completed', value: summary.completedTasks, icon: 'checkCircle', tint: 'success' },
-    { label: 'Overdue', value: summary.overdueTasks, icon: 'clock', tint: summary.overdueTasks ? 'danger' : 'info', alert: summary.overdueTasks > 0 },
-    { label: 'Overloaded people', value: summary.overloadedMembers, icon: 'flame', tint: summary.overloadedMembers ? 'danger' : 'success', alert: summary.overloadedMembers > 0 },
-    { label: 'Projects at risk', value: summary.projectsAtRisk, icon: 'alert', tint: summary.projectsAtRisk ? 'warn' : 'success', alert: summary.projectsAtRisk > 0 },
-    { label: 'Avg team load', value: `${summary.teamLoadPercent}%`, icon: 'gauge', tint: 'info' },
+  const now = new Date();
+  const weekday = now.toLocaleDateString([], { weekday: 'long' });
+  const today = now.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  const metrics = [
+    { label: 'Open tasks', value: summary.openTasks, icon: 'board' },
+    { label: 'Overdue tasks', value: summary.overdueTasks, icon: 'clock', alert: summary.overdueTasks > 0 },
+    { label: 'Projects at risk', value: summary.projectsAtRisk, icon: 'alert', alert: summary.projectsAtRisk > 0 },
+    { label: 'People over capacity', value: summary.overloadedMembers, icon: 'users', alert: summary.overloadedMembers > 0 },
   ];
+  const byLoad = [...members].sort((a, b) => b.loadPercent - a.loadPercent);
+  const byRisk = [...projects].sort((a, b) => (b.riskLevel === 'done' ? -1 : b.riskScore) - (a.riskLevel === 'done' ? -1 : a.riskScore));
 
   return (
     <>
-      <section className="hero">
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div className="eyebrow">{team.name}</div>
+      <header className="page-head dashboard-head">
+        <div>
+          <div className="dashboard-date"><Icon name="calendar" size={16} />{weekday}, {today}</div>
           <h1>{greeting()}, {user.name.split(' ')[0]}</h1>
-          <p>
-            {summary.overloadedMembers || summary.projectsAtRisk
-              ? `${summary.overloadedMembers} teammate(s) overloaded and ${summary.projectsAtRisk} project(s) at risk. Here's where to act first.`
-              : 'Everything is on track. Nice work keeping the team balanced!'}
-          </p>
+          <p>{team.name}</p>
         </div>
-        <div className="hero-health">
-          <Ring value={health} size={72} stroke={8} color="var(--yellow)" sub="health" />
-          <div>
-            <div className="label">Team health</div>
-            <div className="value">{healthLabel}</div>
-            <div className="small" style={{ opacity: 0.8 }}>Updated {timeAgo(data.generatedAt)}</div>
-          </div>
+        <div className="row wrap dashboard-actions">
+          <Link className="btn" to="../board"><Icon name="board" size={16} />Open board</Link>
+          {isManager && <Link className="btn primary" to="../board?new=1"><Icon name="plus" size={16} />New task</Link>}
         </div>
-      </section>
+      </header>
 
-      <div className="stats">
-        {stats.map((s) => (
-          <div key={s.label} className={`card stat ${s.alert ? 'alert' : ''}`}>
-            <span className={`stat-icon tint-${s.tint}`}><Icon name={s.icon} size={22} /></span>
-            <div>
-              <div className="value">{s.value}</div>
-              <div className="label">{s.label}</div>
-            </div>
+      <dl className="dashboard-metrics" aria-label="Team overview">
+        {metrics.map(({ label, value, icon, alert }) => (
+          <div key={label} className={`dashboard-metric ${alert ? 'has-alert' : ''}`}>
+            <dt><Icon name={icon} size={18} />{label}</dt>
+            <dd>{value}</dd>
           </div>
         ))}
-      </div>
+      </dl>
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Needs attention</h2>
+          {atRiskTasks.length > 3 && (
+            <Link className="small strong" to="../board">+{atRiskTasks.length - 3} more on the board</Link>
+          )}
+        </div>
+        {atRiskTasks.length === 0 ? (
+          <div className="empty-panel">
+            <Icon name="checkCircle" size={22} />
+            <div><b>No tasks need attention.</b><br /><span className="muted">Overdue, urgent, and overloaded tasks appear here.</span></div>
+          </div>
+        ) : (
+          <div className="ticket-grid">
+            {atRiskTasks.slice(0, 3).map(({ task, reason }) => (
+              <Ticket key={task._id} task={task} reason={reason} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="dash-grid">
-        <section className="card">
-          <div className="card-title">
-            <h2><span className="title-icon"><Icon name="users" size={17} /></span>Team workload</h2>
-            <span className="muted small">Line = 100% of weekly capacity</span>
+        <section className="panel">
+          <div className="section-head">
+            <h2>Who has room this week</h2>
+            <span className="muted small">Mark = 100% of weekly hours</span>
           </div>
-          {members.map((m) => (
+          {byLoad.length === 0 && <p className="muted">No members yet.</p>}
+          {byLoad.map((m) => (
             <div className="load-row" key={m.user._id}>
-              <div className="row">
-                <Avatar user={m.user} size="lg" />
+              <div className="row" style={{ minWidth: 0 }}>
+                <Avatar user={m.user} />
                 <div className="grow">
-                  <div className="truncate" style={{ fontWeight: 650 }}>{m.user.name}</div>
-                  <div className="muted small">{m.openTasks} open · {m.remainingHours}h left · {m.weeklyCapacity}h/wk</div>
+                  <div className="truncate strong">{m.user.name}</div>
+                  <div className="muted small">{m.openTasks} open · <span className="mono">{m.remainingHours}h</span> left of <span className="mono">{m.weeklyCapacity}h</span></div>
                 </div>
               </div>
-              <div className="bar" title={`${m.loadPercent}% of capacity`}>
-                <span className={`fill-${m.status}`} style={{ width: `${Math.min(m.loadPercent, 200) / 2}%` }} />
-                <i className="cap" style={{ left: '50%' }} />
+              <div className={`capacity is-${m.status}`} role="img" aria-label={`${m.loadPercent}% of weekly capacity`}>
+                <span className="fill" style={{ width: `${(Math.min(m.loadPercent, 100) / 150) * 100}%` }} />
+                {m.loadPercent > 100 && (
+                  <span className="over" style={{ left: `${(100 / 150) * 100}%`, width: `${((Math.min(m.loadPercent, 150) - 100) / 150) * 100}%` }} />
+                )}
+                <i className="mark" />
               </div>
-              <div className="row" style={{ justifyContent: 'flex-end' }}>
-                <span className="load-pct">{m.loadPercent}%</span>
-                <Badge tone={m.status}>{m.status}</Badge>
-              </div>
+              <span className={`load-pct is-${m.status}`}>{m.loadPercent}%</span>
             </div>
           ))}
           {suggestions.map((s) => (
             <div className="suggestion" key={s.task._id}>
-              <span className="title-icon"><Icon name="sparkles" size={17} /></span>
+              <Icon name="arrowRight" size={16} />
               <div className="grow">
-                <div>Move <b>{s.task.title}</b> from {s.from.name} → <b>{s.to.name}</b></div>
+                <div>Move <b>{s.task.title}</b> from {s.from.name} to <b>{s.to.name}</b></div>
                 <div className="muted small">{s.reason}</div>
               </div>
-              {isManager && <button className="btn primary sm" onClick={() => applySuggestion(s)}>Apply</button>}
+              {isManager && <button className="btn sm primary" onClick={() => applySuggestion(s)}>Move it</button>}
             </div>
           ))}
         </section>
 
-        <section className="card">
-          <div className="card-title">
-            <h2><span className="title-icon"><Icon name="target" size={17} /></span>Project deadline risk</h2>
-          </div>
-          {projects.length === 0 && <div className="empty"><Icon name="folder" size={32} />No active projects yet.</div>}
-          {projects.map((p) => (
-            <div key={p.project._id} className="risk-card">
-              <Ring
-                value={p.riskLevel === 'done' ? 100 : p.riskScore}
-                size={62}
-                color={RISK_COLOR[p.riskLevel]}
-                label={p.riskLevel === 'done' ? '✓' : p.riskScore}
-                sub={p.riskLevel === 'done' ? 'done' : 'risk'}
-              />
-              <div className="grow">
-                <div className="row between">
-                  <div className="row truncate">
-                    <span className="color-dot" style={{ background: p.project.color }} />
-                    <b className="truncate">{p.project.name}</b>
-                  </div>
-                  <Badge tone={p.riskLevel}>{p.riskLevel === 'done' ? 'complete' : p.riskLevel}</Badge>
-                </div>
-                <div className="progress"><span style={{ width: `${p.completion}%` }} /></div>
-                <div className="meter">
-                  <span><b>{p.completion}%</b> done</span>
-                  <span><Icon name="calendar" size={12} /> {formatDate(p.project.deadline)} ({p.daysLeft > 0 ? `${p.daysLeft}d left` : 'passed'})</span>
-                  {p.forecastFinish && <span>Forecast <b>{formatDate(p.forecastFinish)}</b></span>}
-                  <span><b>{p.remainingHours}h</b> left</span>
-                </div>
-                {p.reasons.length > 0 && <ul>{p.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <section className="card">
-          <div className="card-title">
-            <h2><span className="title-icon tint-danger"><Icon name="alert" size={17} /></span>Needs attention</h2>
-            <Badge tone={atRiskTasks.length ? 'danger' : 'success'}>{atRiskTasks.length} tasks</Badge>
-          </div>
-          {atRiskTasks.length === 0 && <div className="empty"><Icon name="checkCircle" size={32} />Nothing at risk right now 🎉</div>}
-          {atRiskTasks.map(({ task, reason }) => {
-            const due = relativeDue(task.dueDate);
+        <section className="panel">
+          <div className="section-head"><h2>Project deadlines</h2></div>
+          {byRisk.length === 0 && <p className="muted">No active projects.</p>}
+          {byRisk.map((p) => {
+            const done = p.riskLevel === 'done';
             return (
-              <div className="list-item" key={task._id}>
-                <Avatar user={task.assignee} />
+              <div key={p.project._id} className={`risk-row is-${p.riskLevel}`}>
+                <span className="risk-score">{done ? '—' : p.riskScore}</span>
                 <div className="grow">
-                  <div className="truncate" style={{ fontWeight: 600 }}>{task.title}</div>
-                  <div className="small muted">{task.project?.name} · <span className={`tone-${due.tone}`}>{due.text}</span></div>
+                  <div className="row between">
+                    <b className="row truncate" style={{ gap: 8 }}>
+                      {p.project.name}
+                    </b>
+                    <span className={`level is-${p.riskLevel}`}>{done ? 'complete' : p.riskLevel}</span>
+                  </div>
+                  <div className="meter">
+                    <span><span className="mono">{p.completion}%</span> done</span>
+                    <span>due <span className="mono">{formatDate(p.project.deadline)}</span>{p.daysLeft > 0 ? ` · ${p.daysLeft}d left` : ' · passed'}</span>
+                    {p.forecastFinish && <span>forecast <span className="mono">{formatDate(p.forecastFinish)}</span></span>}
+                    <span><span className="mono">{p.remainingHours}h</span> of work left</span>
+                  </div>
+                  {p.reasons.length > 0 && <ul className="reasons">{p.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                 </div>
-                <Badge tone={reason === 'Overdue' ? 'danger' : 'warn'}>{reason}</Badge>
               </div>
             );
           })}
         </section>
 
-        <section className="card">
-          <div className="card-title">
-            <h2><span className="title-icon tint-success"><Icon name="activity" size={17} /></span>Live activity</h2>
-            <span className="muted small">web + mobile</span>
+        <section className="panel full">
+          <div className="section-head">
+            <h2>Recent activity</h2>
           </div>
           <div className="feed">
-            {activity.length === 0 && <div className="empty">No activity yet.</div>}
+            {activity.length === 0 && <p className="muted">No activity yet.</p>}
             {activity.map((a) => (
-              <div className="list-item" key={a._id}>
+              <div className="feed-item" key={a._id}>
                 <Avatar user={a.actor} />
-                <div className="grow">
-                  <div>{a.message}</div>
-                  <div className="small muted row">
-                    <span className={`platform ${a.platform}`}>
-                      <Icon name={a.platform === 'mobile' ? 'phone' : 'monitor'} size={10} stroke={2.5} />{a.platform}
-                    </span>
-                    {timeAgo(a.createdAt)}
-                  </div>
-                </div>
+                <div className="grow">{a.message}</div>
+                <span className={`device is-${a.platform}`}>
+                  <Icon name={a.platform === 'mobile' ? 'phone' : 'monitor'} size={13} />
+                  {a.platform === 'mobile' ? 'Phone' : a.platform === 'web' ? 'Web' : 'API'}
+                </span>
+                <span className="muted small mono when">{timeAgo(a.createdAt)}</span>
               </div>
             ))}
           </div>

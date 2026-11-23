@@ -5,6 +5,9 @@ import { useAuth } from '../lib/auth.jsx';
 import { getSocket, useSocketEvents } from '../lib/socket.js';
 import { Avatar, Spinner, useToast } from '../components/ui.jsx';
 import Icon, { Logo } from '../components/Icon.jsx';
+import CallRoom from '../components/CallRoom.jsx';
+import MeetingsPanel from '../components/MeetingsPanel.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 // Collapsible sidebar section (like a dropdown menu): the parent toggles, the
 // children are links. It opens automatically when one of its pages is active.
@@ -25,7 +28,6 @@ function NavGroup({ icon, label, isActive, items, emptyText }) {
           {items.length === 0 && <span className="empty-sub">{emptyText}</span>}
           {items.map((item) => (
             <Link key={item.to} to={item.to} className={here === item.to ? 'active' : ''}>
-              {item.color && <span className="color-dot" style={{ background: item.color }} />}
               <span className="truncate">{item.label}</span>
             </Link>
           ))}
@@ -42,8 +44,14 @@ export default function TeamLayout() {
   const toast = useToast();
   const [team, setTeam] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [liveCalls, setLiveCalls] = useState([]); // live video meetings in this team
+  const [callProject, setCallProject] = useState(null); // { _id, name } of the call I'm in
+  const [meetingsProject, setMeetingsProject] = useState(null);
   const [error, setError] = useState('');
   const [live, setLive] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // phone-width navigation drawer
+  const location = useLocation();
+  useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
 
   const reloadTeam = useCallback(
     () => api.get(`/teams/${teamId}`).then((r) => setTeam(r.data.team)).catch((e) => setError(errorMessage(e))),
@@ -74,11 +82,30 @@ export default function TeamLayout() {
     };
   }, []);
 
+  useEffect(() => {
+    api.get(`/teams/${teamId}/calls`).then((r) => setLiveCalls(r.data.calls)).catch(() => {});
+  }, [teamId]);
+
+  const putCall = (call) => setLiveCalls((list) => [...list.filter((c) => c.projectId !== call.projectId), call]);
+  const joinCall = useCallback((project) => {
+    setMeetingsProject(null);
+    setCallProject({ _id: project._id ?? project.projectId, name: project.name ?? project.projectName });
+  }, []);
+  const closeCall = useCallback(() => setCallProject(null), []);
+  const openMeetings = useCallback((project) => setMeetingsProject(project), []);
+
   useSocketEvents(
     {
+      'call:started': ({ call }) => {
+        if (call.teamId !== teamId) return;
+        putCall(call);
+        if (call.startedBy?._id !== user._id) toast(`${call.startedBy?.name} started a meeting in ${call.projectName}`, { icon: 'video', tone: 'alert' });
+      },
+      'call:updated': ({ call }) => call?.teamId === teamId && putCall(call),
+      'call:ended': ({ projectId }) => setLiveCalls((list) => list.filter((c) => c.projectId !== projectId)),
       'activity:new': (a) => {
         if (String(a.team) !== teamId || a.actor?._id === user._id) return;
-        toast(`${a.platform === 'mobile' ? '📱 From mobile' : '💻 From web'} · ${a.message}`);
+        toast(a.message, { icon: a.platform === 'mobile' ? 'phone' : 'monitor', tone: 'live' });
       },
       'team:updated': (p) => String(p.teamId) === teamId && reloadTeam(),
       'team:deleted': (p) => String(p.teamId) === teamId && navigate('/'),
@@ -105,15 +132,18 @@ export default function TeamLayout() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <Link to="/" className="brand"><Logo size={34} />TeamFlow</Link>
-        <div className="team-switch">
-          <div className="nav-label" style={{ padding: 0 }}>Current team</div>
-          <div className="name truncate">{team.name}</div>
-          <span className={`live-dot ${live ? 'on' : ''}`}>{live ? 'Live sync on' : 'Connecting…'}</span>
+      <aside className={`sidebar ${menuOpen ? 'menu-open' : ''}`}>
+        <div className="sidebar-top">
+          <Link to="/" className="brand"><Logo size={34} /><span className="brand-word">TeamFlow</span></Link>
+          <div className="team-switch">
+            <div className="name truncate">{team.name}</div>
+            <span className={`live-dot ${live ? 'on' : ''}`}>{live ? 'Live sync on' : 'Connecting…'}</span>
+          </div>
+          <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label="Menu">
+            <Icon name={menuOpen ? 'x' : 'menu'} size={22} />
+          </button>
         </div>
         <nav className="nav">
-          <div className="nav-label">Workspace</div>
           <NavLink to="dashboard"><Icon name="gauge" />Risk dashboard</NavLink>
           <NavGroup
             icon="board"
@@ -133,7 +163,7 @@ export default function TeamLayout() {
             emptyText="No projects yet"
             items={[
               { to: 'projects', label: 'All projects' },
-              ...projects.map((p) => ({ to: `board?project=${p._id}`, label: p.name, color: p.color })),
+              ...projects.map((p) => ({ to: `board?project=${p._id}`, label: p.name })),
             ]}
           />
           <NavLink to="members"><Icon name="users" />Members</NavLink>
@@ -144,12 +174,37 @@ export default function TeamLayout() {
             <div className="name truncate">{user.name}</div>
             <div className="small" style={{ opacity: 0.7, textTransform: 'capitalize' }}>{myRole}</div>
           </div>
+          <ThemeToggle />
           <button className="btn ghost sm" onClick={logout} title="Sign out" aria-label="Sign out"><Icon name="logout" size={16} /></button>
         </div>
       </aside>
       <main className="main">
-        <Outlet context={{ team, projects, myRole, isManager, reloadTeam, reloadProjects }} />
+        {liveCalls
+          .filter((c) => c.projectId !== callProject?._id)
+          .map((c) => (
+            <div key={c.projectId} className="live-banner">
+              <span className="live-dot-red" />
+              <div className="grow">
+                <b>Live meeting · {c.projectName}</b>
+                <div className="small">Started by {c.startedBy?.name} · {c.participants.length} in the call</div>
+              </div>
+              <button className="btn primary sm" onClick={() => joinCall(c)}><Icon name="video" size={14} />Join</button>
+            </div>
+          ))}
+        <Outlet context={{ team, projects, myRole, isManager, reloadTeam, reloadProjects, liveCalls, joinCall, openMeetings }} />
       </main>
+      {meetingsProject && (
+        <MeetingsPanel
+          project={meetingsProject}
+          teamId={teamId}
+          isManager={isManager}
+          onJoinCall={joinCall}
+          onClose={() => setMeetingsProject(null)}
+        />
+      )}
+      {callProject && (
+        <CallRoom projectId={callProject._id} projectName={callProject.name} isManager={isManager} onClose={closeCall} />
+      )}
     </div>
   );
 }

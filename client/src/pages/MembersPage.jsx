@@ -6,6 +6,27 @@ import { Avatar, Badge, useToast } from '../components/ui.jsx';
 import { timeAgo } from '../lib/format.js';
 import Icon from '../components/Icon.jsx';
 
+// LAN HTTP can lack navigator.clipboard. Keep the fallback inside the click
+// handler so browsers can associate it with the user's copy action.
+function copyFromSelection(code) {
+  const previousFocus = document.activeElement;
+  const field = document.createElement('textarea');
+  field.value = code;
+  field.readOnly = true;
+  field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(field);
+  try {
+    field.select();
+    field.setSelectionRange(0, code.length);
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+    previousFocus?.focus({ preventScroll: true });
+  }
+}
+
 // Single-use invite codes. Every code starts with the same 3 letters from the
 // team name (e.g. BIN for "Bindas"); each one lets exactly one person join.
 function InvitesCard({ team }) {
@@ -20,15 +41,29 @@ function InvitesCard({ team }) {
   );
   useEffect(() => { load(); }, [load, team.members.length]);
 
+  const copyCode = async (code) => {
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(code);
+        copied = true;
+      } catch {
+        // Try the selection-based copy when clipboard permission is denied.
+      }
+    }
+    if (!copied) copied = copyFromSelection(code);
+    toast(copied ? 'Invite code copied' : 'Clipboard access was blocked. Try Copy code again or check browser permissions.',
+      copied ? { icon: 'checkCircle' } : { icon: 'alert' });
+  };
+
   const create = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
       const { data } = await api.post(`/teams/${team._id}/invites`, { label });
       setLabel('');
+      await copyCode(data.invite.code);
       await load();
-      navigator.clipboard?.writeText(data.invite.code).catch(() => {});
-      toast(`New code ${data.invite.code} created and copied`);
     } catch (err) {
       toast(errorMessage(err));
     } finally {
@@ -63,7 +98,7 @@ function InvitesCard({ team }) {
         <button className="btn primary" disabled={busy}><Icon name="plus" size={16} />{busy ? 'Creating…' : 'New invite code'}</button>
       </form>
       <div className="invite-list">
-        {invites && invites.length === 0 && <span className="muted small">No codes yet. Create one for each person you want to add.</span>}
+        {invites && invites.length === 0 && <span className="muted small">No invite codes yet.</span>}
         {invites?.map((inv) => (
           <div key={inv._id} className={`invite-row ${inv.usedBy ? 'used' : ''}`}>
             <span className="code">{inv.code}</span>
@@ -78,7 +113,7 @@ function InvitesCard({ team }) {
             ) : (
               <>
                 <Badge tone="info">unused</Badge>
-                <button className="btn sm" type="button" onClick={() => navigator.clipboard?.writeText(inv.code).then(() => toast('Copied'))}>Copy</button>
+                <button className="btn sm" type="button" onClick={() => copyCode(inv.code)}>Copy code</button>
                 <button className="btn sm danger" type="button" onClick={() => revoke(inv)}>Revoke</button>
               </>
             )}
@@ -105,6 +140,32 @@ export default function MembersPage() {
       toast(errorMessage(e));
     }
   };
+
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const uploadPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast('That photo is larger than 5 MB. Choose a smaller one.');
+    setPhotoBusy(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const { data } = await api.post('/auth/me/avatar', body);
+      setUser(data.user);
+      toast('Profile photo updated');
+      reloadTeam();
+    } catch (err) {
+      toast(errorMessage(err));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  const removePhoto = () =>
+    act(async () => {
+      const { data } = await api.delete('/auth/me/avatar');
+      setUser(data.user);
+    }, 'Profile photo removed');
 
   const saveCapacity = () =>
     act(async () => {
@@ -150,9 +211,8 @@ export default function MembersPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">{team.name}</div>
           <h1>Members</h1>
-          <p className="muted">{isManager ? 'Give each new member their own one-time invite code.' : 'Ask your owner or a manager for an invite code to add someone.'}</p>
+          <p className="muted">{team.name} · {isManager ? 'Manage members and invite codes.' : 'People in this team.'}</p>
         </div>
         <button className="btn" onClick={exportCsv}><Icon name="download" size={16} />Export tasks CSV</button>
       </div>
@@ -208,8 +268,26 @@ export default function MembersPage() {
         </section>
 
         <section className="card">
+          <div className="card-title"><h2>Your profile</h2></div>
+          <div className="profile-photo">
+            <Avatar user={user} size="xl" />
+            <div className="stack" style={{ gap: 8 }}>
+              <div><b>{user.name}</b><div className="muted small">{user.email}</div></div>
+              <div className="row wrap">
+                <label className="btn sm">
+                  <Icon name="camera" size={15} />{photoBusy ? 'Uploading…' : user.avatarUrl ? 'Change photo' : 'Add photo'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" hidden disabled={photoBusy} onChange={uploadPhoto} />
+                </label>
+                {user.avatarUrl && <button className="btn sm ghost" onClick={removePhoto} disabled={photoBusy}>Remove</button>}
+              </div>
+              <span className="muted small">JPG, PNG or WEBP, up to 5 MB.</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
           <div className="card-title"><h2><span className="title-icon tint-info"><Icon name="clock" size={17} /></span>My availability</h2></div>
-          <p className="muted small">How many hours per week you can give this team. The risk dashboard uses this to decide when you are overloaded.</p>
+          <p className="muted small">Hours per week you can work on this team.</p>
           <div className="row">
             <input type="number" min="1" max="80" value={capacity} onChange={(e) => setCapacity(e.target.value)} style={{ width: 100 }} />
             <span className="muted">hours / week</span>

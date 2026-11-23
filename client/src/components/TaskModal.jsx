@@ -1,12 +1,46 @@
-import { useState } from 'react';
-import { api, errorMessage, fileUrl } from '../lib/api.js';
+import { useEffect, useState } from 'react';
+import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { PRIORITIES, STATUSES, fromInputDate, toInputDate } from '../lib/format.js';
 import { Modal } from './ui.jsx';
+import Icon from './Icon.jsx';
+import { serialOf } from './Ticket.jsx';
 
 // Create (task = null) or edit an existing task.
 // Owners/managers can edit everything. A member can only change the status and
 // progress of a task assigned to them, and attach proof photos.
+function ProofFile({ taskId, attachment }) {
+  const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl;
+    api.get(`/tasks/${taskId}/attachments/${attachment._id}`, {
+      responseType: 'blob',
+      signal: controller.signal,
+    }).then(({ data }) => {
+      if (controller.signal.aborted) return;
+      objectUrl = URL.createObjectURL(data);
+      setUrl(objectUrl);
+    }).catch(() => {
+      if (!controller.signal.aborted) setFailed(true);
+    });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [taskId, attachment._id]);
+
+  if (!url) return <span className="muted small">{failed ? `Could not load ${attachment.name}` : 'Loading attachment…'}</span>;
+  return (
+    <a href={url} download={attachment.name} title={attachment.name}>
+      {attachment.mimeType?.startsWith('image/')
+        ? <img src={url} alt={attachment.name} />
+        : <span className="file-chip"><Icon name="paperclip" size={13} />{attachment.name}</span>}
+    </a>
+  );
+}
+
 export default function TaskModal({ task, team, projects, defaultProject, isManager, onClose, onSaved }) {
   const { user } = useAuth();
   const isNew = !task;
@@ -79,14 +113,14 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
   };
 
   return (
-    <Modal title={isNew ? 'New task' : 'Task details'} onClose={onClose}>
+    <Modal title={isNew ? 'New ticket' : `${serialOf(task)} · ${task.title}`} onClose={onClose}>
       <form className="stack" onSubmit={save}>
         {error && <div className="error-box">{error}</div>}
         {!canEdit && (
           <div className="info-note">
             {isMine
-              ? 'You can update the status and progress of this task and add proof photos. Only the owner or a manager can change anything else.'
-              : 'Only the owner, a manager or the assigned member can update this task.'}
+              ? 'You can update status, progress and photos.'
+              : 'View only.'}
           </div>
         )}
         <label className="field">Title
@@ -132,13 +166,11 @@ export default function TaskModal({ task, team, projects, defaultProject, isMana
 
         {!isNew && (
           <div className="stack" style={{ gap: 6 }}>
-            <span className="muted small" style={{ fontWeight: 600 }}>Attachments (photos taken on mobile appear here)</span>
+            <span className="muted small" style={{ fontWeight: 600 }}>Attachments</span>
             <div className="attachments">
               {attachments.length === 0 && <span className="muted small">None yet</span>}
               {attachments.map((a) => (
-                <a key={a._id} href={fileUrl(a.url)} target="_blank" rel="noreferrer" title={a.name}>
-                  {a.mimeType?.startsWith('image/') ? <img src={fileUrl(a.url)} alt={a.name} /> : <span className="badge muted">📄 {a.name}</span>}
-                </a>
+                <ProofFile key={a._id} taskId={task._id} attachment={a} />
               ))}
             </div>
             {canUpdate && <input type="file" accept="image/*,application/pdf" onChange={upload} />}

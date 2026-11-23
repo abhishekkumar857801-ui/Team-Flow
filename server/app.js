@@ -16,12 +16,19 @@ export function createApp() {
   const app = express();
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'blob:'] } },
+  }));
   app.use(cors({ origin: env.corsOrigins.includes('*') ? true : env.corsOrigins }));
   app.use(express.json({ limit: '1mb' }));
   if (env.nodeEnv !== 'test') app.use(morgan('dev'));
 
-  app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+  // Profile photos remain public; task proof is served through the authenticated API.
+  app.use('/uploads', (req, res, next) => {
+    if (!/^\/avatar-[a-f0-9]{24}-\d+\.[a-z0-9]+$/i.test(req.path)) return res.sendStatus(404);
+    next();
+  }, express.static(UPLOAD_DIR, { maxAge: '7d' }));
   app.use('/api', apiRoutes);
 
   // In production the server can also serve the built React app (client/dist).

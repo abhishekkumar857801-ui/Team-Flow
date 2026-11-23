@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import Message from '../models/Message.js';
+import Meeting from '../models/Meeting.js';
 import { asyncHandler, badRequest, forbidden, notFound } from '../utils/http.js';
 import { hasRole, loadTeamForUser } from '../middleware/team.js';
 import { logActivity } from '../services/activity.js';
@@ -79,6 +80,7 @@ export const deleteProject = asyncHandler(async (req, res) => {
   const { project } = await loadProject(req, 'manager');
   await Task.deleteMany({ project: project._id });
   await Message.deleteMany({ project: project._id });
+  await Meeting.deleteMany({ project: project._id });
   await project.deleteOne();
   await logActivity({
     req,

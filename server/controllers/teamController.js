@@ -5,12 +5,13 @@ import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import Activity from '../models/Activity.js';
 import Message from '../models/Message.js';
+import Meeting from '../models/Meeting.js';
 import { asyncHandler, badRequest, forbidden, notFound } from '../utils/http.js';
 import { hasRole } from '../middleware/team.js';
 import { logActivity } from '../services/activity.js';
-import { emitToTeam } from '../services/realtime.js';
+import { emitToTeam, revokeTeamAccess } from '../services/realtime.js';
 
-const MEMBER_FIELDS = 'name email avatarColor weeklyCapacity';
+const MEMBER_FIELDS = 'name email avatarColor avatarUrl weeklyCapacity';
 
 // joinCode is a legacy field (one shared code per team); joining now uses single-use invites.
 const withRole = (team, userId) => {
@@ -56,10 +57,12 @@ export const deleteTeam = asyncHandler(async (req, res) => {
     Project.deleteMany({ team: teamId }),
     Activity.deleteMany({ team: teamId }),
     Message.deleteMany({ team: teamId }),
+    Meeting.deleteMany({ team: teamId }),
     Invite.deleteMany({ team: teamId }),
   ]);
   await req.team.deleteOne();
   emitToTeam(teamId, 'team:deleted', { teamId });
+  for (const member of req.team.members) revokeTeamAccess(teamId, member.user);
   res.status(204).end();
 });
 
@@ -140,6 +143,7 @@ export const removeMember = asyncHandler(async (req, res) => {
 
   req.team.members = req.team.members.filter((m) => String(m.user) !== userId);
   await req.team.save();
+  revokeTeamAccess(req.team._id, userId);
   // Their open tasks go back to the unassigned pool.
   await Task.updateMany({ team: req.team._id, assignee: userId, status: { $ne: 'done' } }, { assignee: null });
   emitToTeam(req.team._id, 'team:updated', { teamId: req.team._id });

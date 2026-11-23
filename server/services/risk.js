@@ -79,7 +79,7 @@ export function analyzeMembers(members, tasks, now = Date.now()) {
     const completedThisWeek = mine.filter((t) => t.completedAt && now - new Date(t.completedAt).getTime() <= 7 * DAY).length;
 
     return {
-      user: { _id: uid, name: user.name, email: user.email, avatarColor: user.avatarColor },
+      user: { _id: uid, name: user.name, email: user.email, avatarColor: user.avatarColor, avatarUrl: user.avatarUrl },
       role: m.role,
       weeklyCapacity: capacity,
       openTasks: open.length,

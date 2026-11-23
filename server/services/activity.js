@@ -11,7 +11,7 @@ export async function logActivity({ req, team, project = null, task = null, acti
     message,
     platform: req.platform || 'api',
   });
-  const populated = await doc.populate('actor', 'name avatarColor');
+  const populated = await doc.populate('actor', 'name avatarColor avatarUrl');
   emitToTeam(team, 'activity:new', populated);
   return populated;
 }

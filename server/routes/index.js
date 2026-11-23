@@ -3,13 +3,14 @@ import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTeamRole } from '../middleware/team.js';
 import { validate } from '../middleware/validate.js';
-import { upload } from '../middleware/upload.js';
+import { avatarUpload, upload } from '../middleware/upload.js';
 import * as S from '../validators/schemas.js';
 import * as auth from '../controllers/authController.js';
 import * as teams from '../controllers/teamController.js';
 import * as projects from '../controllers/projectController.js';
 import * as tasks from '../controllers/taskController.js';
 import * as chat from '../controllers/chatController.js';
+import * as meetings from '../controllers/meetingController.js';
 import * as dashboard from '../controllers/dashboardController.js';
 
 const router = Router();
@@ -23,6 +24,8 @@ router.post('/auth/register', authLimiter, validate({ body: S.auth.register }), 
 router.post('/auth/login', authLimiter, validate({ body: S.auth.login }), auth.login);
 router.get('/auth/me', requireAuth, auth.me);
 router.patch('/auth/me', requireAuth, validate({ body: S.auth.updateMe }), auth.updateMe);
+router.post('/auth/me/avatar', requireAuth, avatarUpload.single('file'), auth.uploadAvatar);
+router.delete('/auth/me/avatar', requireAuth, auth.removeAvatar);
 
 // Everything below needs a valid token.
 router.use(requireAuth);
@@ -60,7 +63,15 @@ router.delete('/projects/:projectId', projects.deleteProject);
 // ---- Project chat (any team member) ----
 router.get('/projects/:projectId/messages', chat.listMessages);
 router.post('/projects/:projectId/messages', validate({ body: S.chat.send }), chat.sendMessage);
+router.post('/projects/:projectId/messages/photo', chat.authorizePhotoUpload, chat.photoUpload, chat.sendPhoto);
+router.get('/projects/:projectId/messages/:messageId/photo', chat.readPhoto);
 router.delete('/projects/:projectId/messages/:messageId', chat.deleteMessage);
+
+// ---- Project meetings (schedule: owner/manager; view: any member). Live calls use Socket.io. ----
+router.get('/teams/:teamId/calls', requireTeamRole('member'), meetings.listTeamCalls);
+router.get('/projects/:projectId/meetings', meetings.listMeetings);
+router.post('/projects/:projectId/meetings', validate({ body: S.meeting.create }), meetings.createMeeting);
+router.delete('/projects/:projectId/meetings/:meetingId', meetings.deleteMeeting);
 
 // ---- Tasks ----
 router.get('/tasks/mine', tasks.listMyTasks);
@@ -69,7 +80,8 @@ router.post('/teams/:teamId/tasks', requireTeamRole('manager'), validate({ body:
 router.get('/tasks/:taskId', tasks.getTask);
 router.patch('/tasks/:taskId', validate({ body: S.task.update }), tasks.updateTask);
 router.delete('/tasks/:taskId', tasks.deleteTask);
-router.post('/tasks/:taskId/attachments', upload.single('file'), tasks.addAttachment);
+router.get('/tasks/:taskId/attachments/:attachmentId', tasks.downloadAttachment);
+router.post('/tasks/:taskId/attachments', tasks.authorizeAttachmentUpload, upload.single('file'), tasks.addAttachment);
 router.delete('/tasks/:taskId/attachments/:attachmentId', tasks.removeAttachment);
 
 export default router;

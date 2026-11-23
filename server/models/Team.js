@@ -24,6 +24,8 @@ const teamSchema = new mongoose.Schema(
       default: () => crypto.randomBytes(3).toString('hex').toUpperCase(),
     },
     members: [memberSchema],
+    // Running count used to give every task a permanent serial (TF-0001, TF-0002 ...).
+    taskCounter: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }

@@ -3,12 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import { errorMessage } from '../lib/api.js';
 import Icon, { Logo } from '../components/Icon.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
-const FEATURES = [
-  { icon: 'gauge', title: 'Workload radar', text: 'See who is overloaded before burnout happens.' },
-  { icon: 'target', title: 'Deadline forecasts', text: 'Know which projects will slip, and why.' },
-  { icon: 'phone', title: 'Web + mobile, live', text: 'Update on your phone, see it on the web instantly.' },
-];
 
 export default function AuthPage({ mode }) {
   const isLogin = mode === 'login';
@@ -38,31 +34,29 @@ export default function AuthPage({ mode }) {
       <section className="auth-hero">
         <div className="brand"><Logo />TeamFlow</div>
         <div>
-          <h1>Ship team projects on time, without burning anyone out.</h1>
-          <p className="lead">Assign tasks, track deadlines and spot risk early, for student teams, clubs and small businesses.</p>
+          <h1>Plan, assign and track your team's work.</h1>
+          <p className="lead">Tasks, deadlines and workload in one place, on the web and on your phone.</p>
         </div>
-        <div className="feature-list">
-          {FEATURES.map((f) => (
-            <div className="feature" key={f.title}>
-              <span className="ficon"><Icon name={f.icon} /></span>
-              <div><b>{f.title}</b><span>{f.text}</span></div>
-            </div>
-          ))}
-        </div>
+        <ul className="auth-points">
+          <li><Icon name="board" size={18} /><span>Task board</span></li>
+          <li><Icon name="gauge" size={18} /><span>Workload and deadline risk</span></li>
+          <li><Icon name="video" size={18} /><span>Team chat and video meetings</span></li>
+        </ul>
       </section>
 
       <section className="auth-side">
+        <div className="auth-theme"><ThemeToggle className="btn sm" /></div>
         <form className="card auth-card stack" onSubmit={submit}>
           <div>
-            <h1>{isLogin ? 'Welcome back 👋' : 'Create your account'}</h1>
+            <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
             <p className="muted">
-              {isLogin ? 'Sign in with the same account you use on the mobile app.' : 'One account works on web and mobile.'}
+              {isLogin ? 'Sign in to your account.' : 'Get started with TeamFlow.'}
             </p>
           </div>
           {error && <div className="error-box"><Icon name="alert" size={16} />{error}</div>}
           {!isLogin && (
             <label className="field">Full name
-              <input value={form.name} onChange={set('name')} required minLength={2} autoComplete="name" placeholder="Asha Rao" />
+              <input value={form.name} onChange={set('name')} required minLength={2} autoComplete="name" placeholder="Your name" />
             </label>
           )}
           <label className="field">Email

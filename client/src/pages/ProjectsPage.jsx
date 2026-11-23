@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api.js';
 import { formatDate, fromInputDate, relativeDue, toInputDate } from '../lib/format.js';
-import { Badge, Modal } from '../components/ui.jsx';
+import { Modal } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
 
-const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-const STATUS_TONE = { planning: 'muted', active: 'info', on_hold: 'warn', completed: 'success' };
 
 function ProjectForm({ team, project, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -14,7 +12,6 @@ function ProjectForm({ team, project, onClose, onSaved }) {
     description: project?.description || '',
     deadline: toInputDate(project?.deadline),
     status: project?.status || 'active',
-    color: project?.color || COLORS[0],
   });
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -48,13 +45,6 @@ function ProjectForm({ team, project, onClose, onSaved }) {
             </select>
           </label>
         </div>
-        <div className="row">
-          {COLORS.map((c) => (
-            <button type="button" key={c} onClick={() => setForm({ ...form, color: c })} aria-label={`Color ${c}`}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: c, cursor: 'pointer',
-                border: form.color === c ? '3px solid var(--text)' : '2px solid transparent' }} />
-          ))}
-        </div>
         <button className="btn primary">{project ? 'Save' : 'Create project'}</button>
       </form>
     </Modal>
@@ -62,7 +52,7 @@ function ProjectForm({ team, project, onClose, onSaved }) {
 }
 
 export default function ProjectsPage() {
-  const { team, projects, isManager, reloadProjects } = useOutletContext();
+  const { team, projects, isManager, reloadProjects, openMeetings } = useOutletContext();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(null);
 
@@ -80,37 +70,41 @@ export default function ProjectsPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">{team.name}</div>
           <h1>Projects</h1>
-          <p className="muted">{projects.length} project(s) in {team.name}</p>
+          <p className="muted">{team.name} · {projects.length} {projects.length === 1 ? 'project' : 'projects'}</p>
         </div>
         {isManager && <button className="btn primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} />New project</button>}
       </div>
       {projects.length === 0 ? (
-        <div className="card empty">No projects yet.{isManager ? ' Create the first one.' : ' Ask a manager to create one.'}</div>
+        <div className="empty-panel">
+          <Icon name="folder" size={22} />
+          <div><b>No projects yet.</b> {isManager ? 'Create your first project.' : 'No projects have been shared with you yet.'}</div>
+        </div>
       ) : (
         <div className="tile-grid">
           {projects.map((p) => {
             const pct = p.taskCount ? Math.round((p.doneCount / p.taskCount) * 100) : 0;
             const due = relativeDue(p.deadline);
             return (
-              <div key={p._id} className="card stack project-card">
-                <span className="stripe" style={{ background: p.color }} />
-                <div className="row between">
+              <div key={p._id} className="card project-card">
+                <div className="project-field">
                   <h2>{p.name}</h2>
-                  <Badge tone={STATUS_TONE[p.status]}>{p.status.replace('_', ' ')}</Badge>
+                  <span className="project-status">{p.status.replace('_', ' ')}</span>
                 </div>
-                <p className="muted small" style={{ margin: 0 }}>{p.description || 'No description'}</p>
+                <div className="stack" style={{ padding: 16, gap: 12 }}>
+                <p className="muted small" style={{ margin: 0 }}>{p.description || 'No description yet.'}</p>
                 <div>
-                  <div className="row between small"><span>{p.doneCount}/{p.taskCount} tasks</span><b>{pct}%</b></div>
-                  <div className="progress"><span style={{ width: `${pct}%`, background: p.color }} /></div>
+                  <div className="row between small"><span><span className="mono">{p.doneCount}/{p.taskCount}</span> tickets done</span><span className="mono strong">{pct}%</span></div>
+                  <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 </div>
-                <div className="small row"><Icon name="calendar" size={14} />{formatDate(p.deadline)} · <span className={`tone-${due.tone}`}>{due.text}</span></div>
+                <div className="small row"><Icon name="calendar" size={14} /><span className="mono">{formatDate(p.deadline)}</span> · <span className={`tone-${due.tone}`}>{due.text}</span></div>
                 <div className="row">
                   <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}`)}><Icon name="board" size={14} />Open board</button>
                   <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}&chat=1`)}><Icon name="chat" size={14} />Chat</button>
+                  <button className="btn sm" onClick={() => openMeetings(p)}><Icon name="video" size={14} />Meet</button>
                   {isManager && <button className="btn sm" onClick={() => setEditing(p)}>Edit</button>}
                   {isManager && <button className="btn sm danger" onClick={() => remove(p)}>Delete</button>}
+                </div>
                 </div>
               </div>
             );

@@ -1,6 +1,16 @@
 // Small inline SVG icon set (stroke icons, 24x24 grid) so we don't need an icon library.
 const PATHS = {
   chevronDown: 'm6 9 6 6 6-6',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42',
+  camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  person: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  mic: 'M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3',
+  micOff: 'm2 2 20 20M18.89 13.23A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.34V5a3 3 0 0 0-5.68-1.33M9 9v3a3 3 0 0 0 5.12 2.12M12 19v3',
+  video: 'm16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z',
+  videoOff: 'm2 2 20 20M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2',
+  phoneOff: 'M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67M4.18 13.43A19.79 19.79 0 0 1 2.08 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91M22 2 2 22',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
   dot: 'M12 12h.01',
@@ -55,14 +65,14 @@ export function Logo({ size = 36 }) {
   return (
     <span className="logo" style={{ width: size, height: size }}>
       <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
-        <rect width="100" height="100" rx="22.5" fill="#2563EB" />
-        <g fill="#fff">
+        <rect width="100" height="100" rx="22.5" fill="#14213d" />
+        <g fill="#f4ede0">
           <rect x="20" y="24" width="60" height="11" rx="5.5" />
           <rect x="20" y="44" width="44" height="11" rx="5.5" />
           <rect x="20" y="64" width="26" height="11" rx="5.5" />
         </g>
-        <circle cx="66" cy="72" r="14" fill="#FACC15" />
-        <path d="M59 72.5l5 5 9.5-10.5" fill="none" stroke="#1D4ED8" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="66" cy="72" r="14" fill="#ff6b5b" />
+        <path d="M59 72.5l5 5 9.5-10.5" fill="none" stroke="#14213d" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </span>
   );

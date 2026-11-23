@@ -1,3 +1,4 @@
+import multer from 'multer';
 import mongoose from 'mongoose';
 import Message from '../models/Message.js';
 import Project from '../models/Project.js';
@@ -5,7 +6,7 @@ import { asyncHandler, badRequest, forbidden, notFound } from '../utils/http.js'
 import { hasRole, loadTeamForUser } from '../middleware/team.js';
 import { emitToTeam } from '../services/realtime.js';
 
-const SENDER_FIELDS = 'name avatarColor';
+const SENDER_FIELDS = 'name avatarColor avatarUrl';
 const PAGE_SIZE = 50;
 
 // Any member of the project's team may use its chat.
@@ -62,4 +63,46 @@ export const deleteMessage = asyncHandler(async (req, res) => {
   await message.deleteOne();
   emitToTeam(project.team, 'chat:deleted', { projectId: String(project._id), messageId: String(message._id) });
   res.status(204).end();
+});
+
+export const authorizePhotoUpload = asyncHandler(async (req, _res, next) => {
+  req.chatProject = (await loadProjectForChat(req)).project;
+  next();
+});
+
+export const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 0 },
+}).single('file');
+
+export const sendPhoto = asyncHandler(async (req, res) => {
+  const bytes = req.file?.buffer;
+  let photoType;
+  if (bytes?.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'))) photoType = 'image/jpeg';
+  if (bytes?.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) photoType = 'image/png';
+  if (bytes?.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') photoType = 'image/webp';
+  if (!photoType) throw badRequest('Choose a JPG, PNG or WebP photo.');
+
+  const project = req.chatProject;
+  const saved = await Message.create({
+    project: project._id,
+    team: project.team,
+    sender: req.user._id,
+    photoType,
+    photo: bytes,
+  });
+  const message = saved.toObject();
+  delete message.photo;
+  await Message.populate(message, { path: 'sender', select: SENDER_FIELDS });
+  emitToTeam(project.team, 'chat:message', { projectId: String(project._id), message });
+  res.status(201).json({ message });
+});
+
+export const readPhoto = asyncHandler(async (req, res) => {
+  const { project } = await loadProjectForChat(req);
+  const { messageId } = req.params;
+  if (!mongoose.isValidObjectId(messageId)) throw badRequest('Invalid message id');
+  const message = await Message.findOne({ _id: messageId, project: project._id }).select('photoType +photo');
+  if (!message?.photo || !message.photoType) throw notFound('Photo not found');
+  res.set('Cache-Control', 'private, no-store').type(message.photoType).send(message.photo);
 });

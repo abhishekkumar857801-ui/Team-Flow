@@ -75,3 +75,19 @@ export const task = {
 export const chat = {
   send: z.object({ text: z.string().trim().min(1, 'Message cannot be empty').max(2000) }),
 };
+
+export const meeting = {
+  create: z.object({
+    title: z.string().trim().min(2).max(120),
+    agenda: z.string().trim().max(2000).optional(),
+    startsAt: date,
+    durationMinutes: z.coerce.number().int().min(5).max(600).optional(),
+    // Optional outside link (Google Meet, Zoom, Teams...). Empty = built-in video call.
+    link: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((v) => v === '' || /^https:\/\/\S+$/i.test(v), 'Link must start with https://')
+      .optional(),
+  }),
+};

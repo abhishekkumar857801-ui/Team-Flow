@@ -4,7 +4,7 @@ import Activity from '../models/Activity.js';
 import { asyncHandler } from '../utils/http.js';
 import { analyzeTeam } from '../services/risk.js';
 
-const MEMBER_FIELDS = 'name email avatarColor weeklyCapacity';
+const MEMBER_FIELDS = 'name email avatarColor avatarUrl weeklyCapacity';
 
 // GET /api/teams/:teamId/dashboard: the workload & deadline risk dashboard.
 export const getDashboard = asyncHandler(async (req, res) => {
@@ -12,7 +12,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const [projects, tasks] = await Promise.all([
     Project.find({ team: req.team._id, status: { $ne: 'completed' } }).lean(),
     Task.find({ team: req.team._id })
-      .populate('assignee', 'name avatarColor')
+      .populate('assignee', 'name avatarColor avatarUrl')
       .populate('project', 'name color')
       .lean(),
   ]);
@@ -23,7 +23,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
 export const getActivity = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 100);
   const activity = await Activity.find({ team: req.team._id })
-    .populate('actor', 'name avatarColor')
+    .populate('actor', 'name avatarColor avatarUrl')
     .sort({ createdAt: -1 })
     .limit(limit);
   res.json({ activity });

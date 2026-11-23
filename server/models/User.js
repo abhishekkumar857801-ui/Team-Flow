@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema(
     // Used by the workload dashboard to decide who is overloaded.
     weeklyCapacity: { type: Number, default: 20, min: 1, max: 80 },
     avatarColor: { type: String, default: '#6366f1' },
+    // Profile photo uploaded by the user (served from /uploads); empty = show initials.
+    avatarUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );

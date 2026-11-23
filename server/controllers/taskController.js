@@ -11,7 +11,7 @@ import { emitToTeam, emitToUser } from '../services/realtime.js';
 import { UPLOAD_DIR } from '../middleware/upload.js';
 
 const POPULATE = [
-  { path: 'assignee', select: 'name email avatarColor' },
+  { path: 'assignee', select: 'name email avatarColor avatarUrl' },
   { path: 'createdBy', select: 'name' },
   { path: 'project', select: 'name color deadline' },
   { path: 'team', select: 'name' },
@@ -47,7 +47,7 @@ function notifyAssignee(task, req, title) {
   if (task.assignee && String(task.assignee) !== String(req.user._id)) {
     emitToUser(task.assignee, 'notify', {
       title,
-      body: `${task.title} (from ${req.user.name})`,
+      body: `TF-${String(task.number || 0).padStart(4, '0')} ${task.title} (from ${req.user.name})`,
       taskId: task._id,
       teamId: task.team,
     });
@@ -155,21 +155,42 @@ export const deleteTask = asyncHandler(async (req, res) => {
   res.status(204).end();
 });
 
-// Photo / file proof, typically captured with the phone camera.
-export const addAttachment = asyncHandler(async (req, res) => {
+export const downloadAttachment = asyncHandler(async (req, res, next) => {
+  const { task } = await loadTask(req);
+  const attachment = task.attachments.id(req.params.attachmentId);
+  if (!attachment) throw notFound('Attachment not found');
+  res.set('Cache-Control', 'private, no-store');
+  res.type(attachment.mimeType);
+  res.sendFile(path.basename(attachment.url), { root: UPLOAD_DIR, cacheControl: false }, (error) => {
+    if (error) next(error.status === 404 ? notFound('Attachment file not found') : error);
+  });
+});
+
+export const authorizeAttachmentUpload = asyncHandler(async (req, _res, next) => {
   const { task, role } = await loadTask(req);
-  if (!req.file) throw badRequest('Attach a file in the "file" field');
   if (!hasRole(role, 'manager') && !isMine(task, req.user._id)) {
-    await fs.unlink(req.file.path).catch(() => {});
     throw forbidden('You can only attach files to your own tasks');
   }
+  req.attachmentTask = task;
+  next();
+});
+
+// Photo or file proof, typically captured with the phone camera.
+export const addAttachment = asyncHandler(async (req, res) => {
+  const task = req.attachmentTask;
+  if (!req.file) throw badRequest('Attach a file in the "file" field');
   task.attachments.push({
     url: `/uploads/${req.file.filename}`,
     name: req.file.originalname,
     mimeType: req.file.mimetype,
     uploadedBy: req.user._id,
   });
-  await task.save();
+  try {
+    await task.save();
+  } catch (error) {
+    await fs.unlink(req.file.path).catch(() => {});
+    throw error;
+  }
   await logActivity({
     req,
     team: task.team,

@@ -17,6 +17,8 @@ const attachmentSchema = new mongoose.Schema(
 const taskSchema = new mongoose.Schema(
   {
     team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', required: true, index: true },
+    // Permanent per-team serial shown as TF-0001 on web, phone and notifications.
+    number: { type: Number, index: true },
     project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     description: { type: String, trim: true, maxlength: 5000, default: '' },
@@ -32,6 +34,21 @@ const taskSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// New tasks take the next serial from their team's counter (atomic, so two
+// tasks created at the same moment never share a number).
+taskSchema.pre('save', async function assignSerial(next) {
+  if (!this.isNew || this.number) return next();
+  try {
+    const team = await mongoose
+      .model('Team')
+      .findByIdAndUpdate(this.team, { $inc: { taskCounter: 1 } }, { new: true, projection: { taskCounter: 1 } });
+    if (team) this.number = team.taskCounter;
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Keep completedAt / progress consistent with status, whichever client changed it.
 taskSchema.pre('save', function syncCompletion(next) {

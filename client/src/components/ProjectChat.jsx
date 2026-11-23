@@ -5,6 +5,29 @@ import { useSocketEvents } from '../lib/socket.js';
 import { Avatar } from './ui.jsx';
 import Icon from './Icon.jsx';
 
+function ChatPhoto({ path }) {
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    let url;
+    api.get(path, { responseType: 'blob', signal: controller.signal }).then(({ data }) => {
+      if (controller.signal.aborted) return;
+      url = URL.createObjectURL(data);
+      setSrc(url);
+    }).catch(() => {
+      if (!controller.signal.aborted) setFailed(true);
+    });
+    return () => {
+      controller.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [path]);
+  if (failed) return <span>Photo unavailable</span>;
+  if (!src) return <span>Loading photo…</span>;
+  return <a href={src} target="_blank" rel="noreferrer"><img className="chat-photo" src={src} alt="Shared photo" /></a>;
+}
+
 const timeOf = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const dayOf = (d) => {
   const date = new Date(d);
@@ -85,6 +108,29 @@ export default function ProjectChat({ project, teamId, isManager, onClose }) {
     }
   };
 
+  const sendPhoto = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || sending) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Choose a photo under 8 MB.');
+      return;
+    }
+    setSending(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post(`/projects/${project._id}/messages/photo`, form);
+      stickToBottom.current = true;
+      setMessages((list) => list && !list.some((m) => m._id === data.message._id) ? [...list, data.message] : list);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const send = async (e) => {
     e?.preventDefault();
     const body = text.trim();
@@ -118,10 +164,9 @@ export default function ProjectChat({ project, teamId, isManager, onClose }) {
     <div className="chat-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="chat-panel" role="dialog" aria-label={`${project.name} chat`}>
         <header className="chat-head">
-          <span className="color-dot" style={{ background: project.color, width: 12, height: 12 }} />
           <div className="grow">
             <h2 className="truncate">{project.name}</h2>
-            <div className="muted small">Project chat · visible to everyone in the team</div>
+            <div className="muted small">Project chat</div>
           </div>
           <button className="btn ghost sm" onClick={onClose} aria-label="Close chat"><Icon name="x" size={18} /></button>
         </header>
@@ -153,6 +198,7 @@ export default function ProjectChat({ project, teamId, isManager, onClose }) {
                   <div className="chat-bubble-wrap">
                     {!mine && !grouped && <div className="chat-name">{m.sender?.name || 'Former member'}</div>}
                     <div className="chat-bubble">
+                      {m.photoType && <ChatPhoto path={`/projects/${project._id}/messages/${m._id}/photo`} />}
                       {m.text}
                       <span className="chat-time">{timeOf(m.createdAt)}</span>
                     </div>
@@ -170,6 +216,10 @@ export default function ProjectChat({ project, teamId, isManager, onClose }) {
 
         {error && <div className="error-box" style={{ margin: '0 14px 8px' }}>{error}</div>}
         <form className="chat-input" onSubmit={send}>
+          <label className="btn chat-attach" title="Share photo">
+            <input type="file" aria-label="Share photo" accept="image/jpeg,image/png,image/webp" disabled={sending || !messages} onChange={sendPhoto} />
+            <Icon name="camera" size={18} />
+          </label>
           <textarea
             rows={1}
             placeholder={`Message ${project.name}…`}

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { Avatar, Badge, Modal, Spinner } from '../components/ui.jsx';
 import Icon, { Logo } from '../components/Icon.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 // Bright, solid banner colours.
-const BANNERS = ['#2563eb', '#ec4899', '#f97316', '#16a34a', '#8b5cf6'];
 
 export default function TeamsPage() {
   const { user, logout } = useAuth();
@@ -27,7 +27,7 @@ export default function TeamsPage() {
       const { data } =
         dialog === 'create'
           ? await api.post('/teams', { name: form.name, description: form.description })
-          : await api.post('/teams/join', { joinCode: form.joinCode });
+          : await api.post('/teams/join', { joinCode: form.joinCode.trim() });
       navigate(`/teams/${data.team._id}/dashboard`);
     } catch (err) {
       setError(errorMessage(err));
@@ -41,15 +41,15 @@ export default function TeamsPage() {
         <div className="row">
           <Avatar user={user} />
           <span className="muted">{user.name}</span>
+          <ThemeToggle className="btn sm" />
           <button className="btn sm" onClick={logout}>Sign out</button>
         </div>
       </div>
 
       <div className="page-head">
         <div>
-          <div className="eyebrow">Welcome, {user.name.split(' ')[0]}</div>
           <h1>Your teams</h1>
-          <p className="muted">Pick a team to open its workspace, or start a new one.</p>
+          <p className="muted">Welcome back, {user.name.split(' ')[0]}. Pick a team to open its workspace, or start a new one.</p>
         </div>
         <div className="row">
           <button className="btn" onClick={() => setDialog('join')}><Icon name="key" size={16} />Join with code</button>
@@ -60,12 +60,12 @@ export default function TeamsPage() {
       {!teams ? (
         error ? <div className="error-box">{error}</div> : <Spinner />
       ) : teams.length === 0 ? (
-        <div className="card empty"><Icon name="users" size={36} /><h2>No teams yet</h2>Create one, or ask a teammate for their 6-character join code.</div>
+        <div className="card empty"><Icon name="users" size={36} /><h2>No teams yet</h2>Create a team or join one with an invite code.</div>
       ) : (
         <div className="tile-grid">
           {teams.map((t, i) => (
-            <div key={t._id} className="card tile" onClick={() => navigate(`/teams/${t._id}/dashboard`)}>
-              <div className="tile-banner" style={{ background: BANNERS[i % BANNERS.length] }}>
+            <Link key={t._id} className="card tile" to={`/teams/${t._id}/dashboard`}>
+              <div className="tile-banner">
                 <span className="team-initial">{t.name[0]?.toUpperCase()}</span>
               </div>
               <div className="row between">
@@ -76,11 +76,11 @@ export default function TeamsPage() {
               <div className="row between" style={{ marginTop: 12 }}>
                 <div className="row">
                   <div className="avatar-stack">{t.members.slice(0, 5).map((m) => <Avatar key={m.user?._id} user={m.user} />)}</div>
-                  <span className="muted small">{t.members.length} member(s)</span>
+                  <span className="muted small">{t.members.length} {t.members.length === 1 ? 'member' : 'members'}</span>
                 </div>
                 <span className="row small" style={{ color: 'var(--primary)', fontWeight: 600 }}>Open <Icon name="arrowRight" size={14} /></span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

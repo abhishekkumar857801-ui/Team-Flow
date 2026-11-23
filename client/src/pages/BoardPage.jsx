@@ -3,19 +3,19 @@ import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useSocketEvents } from '../lib/socket.js';
-import { STATUSES, relativeDue } from '../lib/format.js';
-import { Avatar, Badge, Spinner, useToast } from '../components/ui.jsx';
+import { STATUSES } from '../lib/format.js';
+import { Badge, Spinner, useToast } from '../components/ui.jsx';
 import TaskModal from '../components/TaskModal.jsx';
 import ProjectChat from '../components/ProjectChat.jsx';
+import Ticket from '../components/Ticket.jsx';
 import Icon from '../components/Icon.jsx';
 
 const isOverdue = (t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date();
 
-const COLUMN_COLOR = { todo: '#94a3b8', in_progress: '#2563eb', review: '#f97316', done: '#16a34a' };
 
 export default function BoardPage() {
   const { teamId } = useParams();
-  const { team, projects, isManager } = useOutletContext();
+  const { team, projects, isManager, liveCalls, openMeetings } = useOutletContext();
   const { user } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -24,10 +24,28 @@ export default function BoardPage() {
   const view = params.get('view') || ''; // '', 'overdue' or 'done' (from the sidebar)
   const [tasks, setTasks] = useState(null);
   const [editing, setEditing] = useState(null); // task | 'new'
+  const newParam = params.get('new') === '1';
   const [dragId, setDragId] = useState(null);
   const [dropCol, setDropCol] = useState(null);
   const [chatOpen, setChatOpen] = useState(params.get('chat') === '1');
+  const meetParam = params.get('meet') === '1';
   const currentProject = projects.find((p) => p._id === projectId);
+  // Opened from the dashboard's "New task" button.
+  useEffect(() => {
+    if (newParam && isManager && projects.length) {
+      setEditing('new');
+      setFilter('new', '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam, projects.length]);
+  // Opened from a project card's "Meet" button: show the meetings panel once.
+  useEffect(() => {
+    if (meetParam && currentProject) {
+      openMeetings(currentProject);
+      setFilter('meet', '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetParam, currentProject?._id]);
 
   const load = useCallback(() => {
     const q = {};
@@ -87,9 +105,8 @@ export default function BoardPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">{team.name}</div>
-          <h1>Task board</h1>
-          <p className="muted">Drag cards between columns. Changes sync to every phone and browser instantly.</p>
+          <h1>{currentProject ? currentProject.name : 'Task board'}</h1>
+          <p className="muted">{team.name} · Open a ticket to update its status.</p>
         </div>
         <div className="toolbar">
           <select value={projectId} onChange={(e) => setFilter('project', e.target.value)} style={{ width: 'auto' }}>
@@ -107,6 +124,12 @@ export default function BoardPage() {
               <Icon name="chat" size={16} />Chat
             </button>
           )}
+          {currentProject && (
+            <button className="btn" onClick={() => openMeetings(currentProject)} title={`Meetings for ${currentProject.name}`}>
+              {liveCalls.some((c) => c.projectId === currentProject._id) ? <span className="live-dot-red" /> : <Icon name="video" size={16} />}
+              Meetings
+            </button>
+          )}
           {isManager && (
             <button className="btn primary" onClick={() => setEditing('new')} disabled={!projects.length}
               title={projects.length ? '' : 'Create a project first'}><Icon name="plus" size={16} />New task</button>
@@ -116,7 +139,7 @@ export default function BoardPage() {
 
       {!projects.length && (
         <div className="card empty">
-          {isManager ? 'Create a project first, then add tasks to it.' : 'No projects yet. Your owner or manager will add them.'}
+          {isManager ? 'Create a project first.' : 'No projects yet.'}
         </div>
       )}
       {view && (
@@ -135,46 +158,31 @@ export default function BoardPage() {
           return (
             <div
               key={col.key}
-              className={`column ${dropCol === col.key ? 'drop' : ''}`}
+              className={`column col-${col.key} ${dropCol === col.key ? 'drop' : ''}`}
               onDragOver={(e) => { e.preventDefault(); setDropCol(col.key); }}
               onDragLeave={() => setDropCol(null)}
               onDrop={(e) => { e.preventDefault(); setDropCol(null); moveTo(e.dataTransfer.getData('text/plain'), col.key); }}
             >
               <div className="column-head">
-                <span className="row"><span className="dot" style={{ background: COLUMN_COLOR[col.key] }} />{col.label}</span>
-                <Badge tone="muted">{items.length}</Badge>
+                <span>{col.label}</span>
+                <span className="mono count">{items.length}</span>
               </div>
-              {items.length === 0 && <div className="empty small" style={{ padding: 24 }}>Drop tasks here</div>}
+              {items.length === 0 && <div className="empty small" style={{ padding: 24 }}>No tasks in this stage</div>}
               {items.map((t) => {
-                const due = relativeDue(t.dueDate);
+                const canDrag = isManager || t.assignee?._id === user._id;
                 return (
-                  <div
+                  <Ticket
                     key={t._id}
-                    className={`task-card ${dragId === t._id ? 'dragging' : ''}`}
-                    style={{ '--accent': t.project?.color }}
-                    draggable={isManager || t.assignee?._id === user._id}
-                    onDragStart={(e) => { e.dataTransfer.setData('text/plain', t._id); setDragId(t._id); }}
-                    onDragEnd={() => setDragId(null)}
+                    task={t}
+                    dragging={dragId === t._id}
+                    showProject={!projectId}
                     onClick={() => setEditing(t)}
-                  >
-                    <div className="row between">
-                      <span className="row small muted truncate"><span className="color-dot" style={{ background: t.project?.color }} />{t.project?.name}</span>
-                      <Badge tone={t.priority}>{t.priority}</Badge>
-                    </div>
-                    <div className="title">{t.title}</div>
-                    <div className="task-meta">
-                      <span className={`row tone-${t.status === 'done' ? 'muted' : due.tone}`} style={{ gap: 4 }}>
-                        <Icon name={t.status === 'done' ? 'checkCircle' : 'calendar'} size={13} />
-                        {t.status === 'done' ? 'Completed' : due.text}
-                      </span>
-                      <span className="chips">
-                        {t.attachments?.length > 0 && <span><Icon name="paperclip" size={12} />{t.attachments.length}</span>}
-                        <span><Icon name="clock" size={12} />{t.estimateHours}h</span>
-                        <Avatar user={t.assignee} />
-                      </span>
-                    </div>
-                    {t.progress > 0 && t.status !== 'done' && <div className="progress"><span style={{ width: `${t.progress}%` }} /></div>}
-                  </div>
+                    dragProps={{
+                      draggable: canDrag,
+                      onDragStart: (e) => { e.dataTransfer.setData('text/plain', t._id); setDragId(t._id); },
+                      onDragEnd: () => setDragId(null),
+                    }}
+                  />
                 );
               })}
             </div>

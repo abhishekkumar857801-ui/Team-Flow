@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { ensureTaskNumbers } from './services/serials.js';
 import os from 'node:os';
 import { env } from './config/env.js';
 import { connectDB } from './config/db.js';
@@ -7,6 +8,8 @@ import { initRealtime } from './services/realtime.js';
 
 export async function start(mongoUri = env.mongoUri) {
   await connectDB(mongoUri);
+  const numbered = await ensureTaskNumbers();
+  if (numbered) console.log(`[db] gave serial numbers to ${numbered} existing task(s)`);
   const app = createApp();
   const server = http.createServer(app);
   initRealtime(server, env.corsOrigins);

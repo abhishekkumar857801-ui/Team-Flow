@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
 import '../services/session.dart';
@@ -10,14 +12,16 @@ import '../widgets/common.dart';
 class ChatMessage {
   final String id;
   final String text;
+  final bool hasPhoto;
   final AppUser? sender;
   final DateTime createdAt;
 
-  ChatMessage({required this.id, required this.text, required this.sender, required this.createdAt});
+  ChatMessage({required this.id, required this.text, required this.hasPhoto, required this.sender, required this.createdAt});
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
         id: j['_id'].toString(),
         text: j['text'] ?? '',
+        hasPhoto: j['photoType'] != null,
         sender: j['sender'] is Map<String, dynamic> ? AppUser.fromJson(j['sender']) : null,
         createdAt: DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now(),
       );
@@ -75,7 +79,7 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scroll.animateTo(_scroll.position.maxScrollExtent, duration: Duration(milliseconds: 200), curve: Curves.easeOut);
       }
     });
   }
@@ -111,6 +115,31 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
     }
   }
 
+  Future<void> _sharePhoto() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      final photo = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+      if (photo == null || !mounted) return;
+      if (await photo.length() > 8 * 1024 * 1024) {
+        if (mounted) showSnack(context, 'Choose a photo under 8 MB.');
+        return;
+      }
+      if (!mounted) return;
+      final res = await session.api.uploadFile('$_base/photo', File(photo.path));
+      if (!mounted) return;
+      final message = ChatMessage.fromJson(res['message']);
+      setState(() {
+        if (!_messages!.any((m) => m.id == message.id)) _messages!.add(message);
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) showSnack(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
@@ -135,11 +164,11 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: Text(m.text, maxLines: 3, overflow: TextOverflow.ellipsis),
+        title: Text('Delete message?'),
+        content: Text(m.hasPhoto ? 'Shared photo' : m.text, maxLines: 3, overflow: TextOverflow.ellipsis),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: Text('Delete')),
         ],
       ),
     );
@@ -169,12 +198,10 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: Row(children: [
-          CircleAvatar(radius: 6, backgroundColor: hexColor(widget.project.color)),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.project.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              const Text('Project chat', style: TextStyle(fontSize: 12, color: AppColors.muted, fontWeight: FontWeight.w500)),
+              Text(widget.project.name, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              Text('Project chat', style: TextStyle(fontSize: 12, color: AppColors.muted, fontWeight: FontWeight.w500)),
             ]),
           ),
         ]),
@@ -184,16 +211,16 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
           child: messages == null
               ? (_error != null
                   ? EmptyState(icon: Icons.cloud_off, title: 'Could not load chat', subtitle: _error)
-                  : const Center(child: CircularProgressIndicator()))
+                  : Center(child: CircularProgressIndicator()))
               : messages.isEmpty
                   ? EmptyState(icon: Icons.chat_bubble_outline, title: 'No messages yet', subtitle: 'Start the conversation about ${widget.project.name}.')
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
                       itemCount: messages.length + (_hasMore ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (_hasMore && index == 0) {
-                          return Center(child: TextButton(onPressed: _loadOlder, child: const Text('Load older messages')));
+                          return Center(child: TextButton(onPressed: _loadOlder, child: Text('Load older messages')));
                         }
                         final i = index - (_hasMore ? 1 : 0);
                         final m = messages[i];
@@ -206,11 +233,12 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
                         return Column(children: [
                           if (newDay)
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              padding: EdgeInsets.symmetric(vertical: 10),
                               child: Pill(_dayLabel(m.createdAt), AppColors.muted),
                             ),
                           _Bubble(
                             message: m,
+                            photoPath: '$_base/${m.id}/photo',
                             mine: mine,
                             grouped: grouped,
                             onLongPress: mine || widget.isManager ? () => _delete(m) : null,
@@ -222,9 +250,14 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
         SafeArea(
           top: false,
           child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-            decoration: const BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.border))),
+            padding: EdgeInsets.fromLTRB(12, 8, 8, 8),
+            decoration: BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.border))),
             child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              IconButton(
+                tooltip: 'Share photo',
+                onPressed: _sending || messages == null ? null : _sharePhoto,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+              ),
               Expanded(
                 child: TextField(
                   controller: _input,
@@ -236,18 +269,18 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
                     hintText: 'Message ${widget.project.name}…',
                     counterText: '',
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               IconButton.filled(
                 tooltip: 'Send',
                 onPressed: _input.text.trim().isEmpty || _sending ? null : _send,
                 icon: _sending
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.send_rounded),
+                    ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.cream))
+                    : Icon(Icons.send_rounded),
               ),
             ]),
           ),
@@ -259,10 +292,11 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
 
 class _Bubble extends StatelessWidget {
   final ChatMessage message;
+  final String photoPath;
   final bool mine;
   final bool grouped;
   final VoidCallback? onLongPress;
-  const _Bubble({required this.message, required this.mine, required this.grouped, this.onLongPress});
+  const _Bubble({required this.message, required this.photoPath, required this.mine, required this.grouped, this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
@@ -271,21 +305,33 @@ class _Bubble extends StatelessWidget {
       onLongPress: onLongPress,
       child: Container(
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        padding: EdgeInsets.fromLTRB(12, 8, 12, 6),
         decoration: BoxDecoration(
-          color: mine ? AppColors.primary : AppColors.surface,
+          color: mine ? AppColors.navy : AppColors.surface,
           border: mine ? null : Border.all(color: AppColors.border),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
             bottomLeft: Radius.circular(mine ? 16 : 4),
             bottomRight: Radius.circular(mine ? 4 : 16),
           ),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-          Text(message.text, style: TextStyle(color: mine ? Colors.white : AppColors.text, fontSize: 15, height: 1.35)),
-          const SizedBox(height: 2),
-          Text(time, style: TextStyle(fontSize: 10, color: mine ? Colors.white70 : AppColors.muted)),
+          if (message.hasPhoto)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(
+                session.api.endpointUrl(photoPath),
+                headers: {'Authorization': 'Bearer ${session.api.token}'},
+                height: 200,
+                fit: BoxFit.contain,
+                semanticLabel: 'Shared photo',
+                errorBuilder: (_, error, stack) => const Text('Photo unavailable'),
+              ),
+            ),
+          if (message.text.isNotEmpty) Text(message.text, style: TextStyle(color: mine ? AppColors.cream : AppColors.text, fontSize: 15, height: 1.35)),
+          SizedBox(height: 2),
+          Text(time, style: TextStyle(fontSize: 10, color: mine ? AppColors.cream.withValues(alpha: .70) : AppColors.muted)),
         ]),
       ),
     );
@@ -297,15 +343,15 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!mine) ...[
-            grouped ? const SizedBox(width: 28) : UserAvatar(message.sender),
-            const SizedBox(width: 8),
+            grouped ? SizedBox(width: 28) : UserAvatar(message.sender),
+            SizedBox(width: 8),
           ],
           Column(crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
             if (!mine && !grouped)
               Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 2),
+                padding: EdgeInsets.only(left: 4, bottom: 2),
                 child: Text(message.sender?.name ?? 'Former member',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted)),
               ),
             bubble,
           ]),

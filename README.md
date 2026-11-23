@@ -151,6 +151,9 @@ All routes are under `/api`. Every route except register, login and health needs
 | GET/PATCH/DELETE | `/projects/:projectId` | member / manager |
 | GET/POST | `/projects/:projectId/messages` (project chat) | member |
 | DELETE | `/projects/:projectId/messages/:messageId` | sender / manager |
+| GET | `/projects/:projectId/meetings` (upcoming, past, live call) | member |
+| POST / DELETE | `/projects/:projectId/meetings[/:meetingId]` (schedule / cancel) | manager |
+| GET | `/teams/:teamId/calls` (live meetings in the team) | member |
 | GET | `/teams/:teamId/tasks` | member |
 | POST | `/teams/:teamId/tasks` (create task) | manager |
 | GET | `/tasks/mine` | signed in |
@@ -162,6 +165,10 @@ All routes are under `/api`. Every route except register, login and health needs
 - `project:changed`, `team:updated`
 - `activity:new`
 - `chat:message`, `chat:deleted`: project chat
+- `meeting:changed`: a meeting was scheduled or cancelled
+- Video calls: `call:start` / `call:join` / `call:leave` / `call:end` (with ack), `call:signal` (WebRTC offer/answer/ICE relay), `call:media`; server pushes `call:started`, `call:updated`, `call:ended`, `call:peer-joined`, `call:peer-left`, `call:peer-media`
+
+**Built-in video meetings:** WebRTC mesh (each person connects directly to every other person, max 8), with Socket.io as the signalling channel and Google's public STUN server. Audio and video never pass through the TeamFlow server. Browsers only allow camera and mic on `https://` or `localhost`, so a hosted deployment must use HTTPS. Very strict networks (some college or office Wi-Fi) may also need a TURN relay server.
 - `notify`: personal "task assigned to you" message
 
 **Security:**

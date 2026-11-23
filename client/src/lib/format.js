@@ -44,3 +44,11 @@ export const initials = (name = '') =>
     .slice(0, 2)
     .map((p) => p[0].toUpperCase())
     .join('');
+
+const AVATAR_COLORS = ['#14213d', 'color-mix(in srgb, #14213d 60%, #ff6b5b)'];
+export function avatarColor(user) {
+  const key = String(user?._id || user?.name || '');
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
