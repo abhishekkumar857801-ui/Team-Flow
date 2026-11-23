@@ -98,13 +98,17 @@ export default function ProjectsPage() {
                   <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 </div>
                 <div className="small row"><Icon name="calendar" size={14} /><span className="mono">{formatDate(p.deadline)}</span> · <span className={`tone-${due.tone}`}>{due.text}</span></div>
-                <div className="row">
+                <div className="row wrap">
                   <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}`)}><Icon name="board" size={14} />Open board</button>
                   <button className="btn sm" onClick={() => navigate(`../board?project=${p._id}&chat=1`)}><Icon name="chat" size={14} />Chat</button>
                   <button className="btn sm" onClick={() => openMeetings(p)}><Icon name="video" size={14} />Meet</button>
-                  {isManager && <button className="btn sm" onClick={() => setEditing(p)}>Edit</button>}
-                  {isManager && <button className="btn sm danger" onClick={() => remove(p)}>Delete</button>}
                 </div>
+                {isManager && (
+                  <div className="row wrap">
+                    <button className="btn sm" onClick={() => setEditing(p)}>Edit</button>
+                    <button className="btn sm danger" onClick={() => remove(p)}>Delete</button>
+                  </div>
+                )}
                 </div>
               </div>
             );
